@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const _baseUrlKey = 'api_base_url';
-  static const _defaultUrl = 'http://10.0.2.2:8000'; // Android emulator localhost
+  static const _defaultUrl = 'https://knowledge-assistant-enmb.onrender.com';
 
   static Future<String> getBaseUrl() async {
     final prefs = await SharedPreferences.getInstance();
