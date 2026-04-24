@@ -20,3 +20,4 @@ flutter_app/pubspec.lock
 
 # macOS
 .DS_Store
+*.apk
