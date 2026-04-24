@@ -117,7 +117,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Knowledge Assistant"),
+        title: const Text("Cura"),
         actions: [
           IconButton(
             icon: const Icon(Icons.bar_chart),

@@ -1,5 +1,5 @@
-name: knowledge_assistant
-description: Personal Knowledge Assistant - save and retrieve content with AI
+name: cura
+description: Cura - save and retrieve content with AI
 
 publish_to: none
 version: 1.0.0+1

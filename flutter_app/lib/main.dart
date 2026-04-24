@@ -18,7 +18,7 @@ class KnowledgeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Knowledge Assistant',
+      title: 'Cura',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6750A4)),
         useMaterial3: true,
