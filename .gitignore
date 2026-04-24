@@ -21,3 +21,7 @@ flutter_app/pubspec.lock
 # macOS
 .DS_Store
 *.apk
+
+# Firebase credentials (never commit)
+flutter_app/android/app/google-services.json
+firebase-credentials.json
