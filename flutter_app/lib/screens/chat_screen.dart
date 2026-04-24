@@ -32,14 +32,16 @@ class _ChatScreenState extends State<ChatScreen> {
     _addWelcome();
     _checkDigest();
     if (widget.sharedUrl != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _ingestUrl(widget.sharedUrl!));
+      WidgetsBinding.instance.addPostFrameCallback((_) => _send(widget.sharedUrl!));
     }
   }
 
   void _addWelcome() {
     _messages.add(ChatMessage(
       text: "Hi! Send me a URL to save it, or ask me anything about your saved content.\n\n"
-          "Try: *\"teach me about RAG\"*, *\"I'm building a dashboard, what's useful?\"*, or *\"what haven't I read yet?\"*",
+          "Try: *\"teach me about RAG\"*, *\"I'm building a dashboard, what's useful?\"*, "
+          "or *\"what haven't I read yet?\"*\n\n"
+          "You can also mix: *\"https://example.com — remind me to try this tomorrow\"*",
       type: BubbleType.assistant,
     ));
   }
@@ -60,47 +62,9 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {}
   }
 
-  Future<void> _ingestUrl(String url) async {
-    setState(() {
-      _messages.add(ChatMessage(text: url, type: BubbleType.user));
-      _loading = true;
-    });
-    _scrollToBottom();
-
-    try {
-      final result = await ApiService.ingest(url);
-      setState(() {
-        _messages.add(ChatMessage(
-          text: "✅ **Saved!**\n\n**Summary:** ${result.summary}\n\n"
-              "**Intent:** ${result.intent}  |  **Tags:** ${result.tags.join(', ')}",
-          type: BubbleType.assistant,
-          label: result.intent,
-        ));
-      });
-    } catch (e) {
-      setState(() {
-        _messages.add(ChatMessage(
-          text: "Couldn't save that URL. The page may be paywalled or require login.",
-          type: BubbleType.system,
-        ));
-      });
-    } finally {
-      setState(() => _loading = false);
-      _scrollToBottom();
-    }
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
+  Future<void> _send(String text) async {
+    text = text.trim();
     if (text.isEmpty || _loading) return;
-
-    _controller.clear();
-
-    final urlPattern = RegExp(r'^https?://');
-    if (urlPattern.hasMatch(text)) {
-      await _ingestUrl(text);
-      return;
-    }
 
     setState(() {
       _messages.add(ChatMessage(text: text, type: BubbleType.user));
@@ -109,7 +73,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final result = await ApiService.query(text);
+      final result = await ApiService.sendMessage(text);
       setState(() {
         _messages.add(ChatMessage(
           text: result.response,
@@ -120,7 +84,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       setState(() {
         _messages.add(ChatMessage(
-          text: "Something went wrong. Try rephrasing your question.",
+          text: "Something went wrong. Check your connection and try again.",
           type: BubbleType.system,
         ));
       });
@@ -128,6 +92,13 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() => _loading = false);
       _scrollToBottom();
     }
+  }
+
+  Future<void> _sendFromInput() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _loading) return;
+    _controller.clear();
+    await _send(text);
   }
 
   void _scrollToBottom() {
@@ -196,7 +167,7 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(
               child: TextField(
                 controller: _controller,
-                onSubmitted: (_) => _sendMessage(),
+                onSubmitted: (_) => _sendFromInput(),
                 decoration: InputDecoration(
                   hintText: "Send a URL or ask a question…",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
@@ -209,7 +180,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: _loading ? null : _sendMessage,
+              onPressed: _loading ? null : _sendFromInput,
               icon: const Icon(Icons.send),
             ),
           ],

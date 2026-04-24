@@ -16,33 +16,20 @@ class ApiService {
     await prefs.setString(_baseUrlKey, url.trimRight().replaceAll(RegExp(r'/$'), ''));
   }
 
-  static Future<IngestResult> ingest(String url) async {
+  // Unified endpoint — handles URL, query, or mixed URL+text
+  static Future<MessageResult> sendMessage(String message) async {
     final base = await getBaseUrl();
     final response = await http.post(
-      Uri.parse('$base/ingest'),
+      Uri.parse('$base/message'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'url': url}),
-    ).timeout(const Duration(seconds: 30));
+      body: jsonEncode({'message': message}),
+    ).timeout(const Duration(seconds: 45));
 
     if (response.statusCode != 200) {
       final detail = jsonDecode(response.body)['detail'] ?? 'Unknown error';
       throw Exception(detail);
     }
-    return IngestResult.fromJson(jsonDecode(response.body));
-  }
-
-  static Future<QueryResult> query(String message) async {
-    final base = await getBaseUrl();
-    final response = await http.post(
-      Uri.parse('$base/query'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'message': message}),
-    ).timeout(const Duration(seconds: 30));
-
-    if (response.statusCode != 200) {
-      throw Exception('Query failed: ${response.statusCode}');
-    }
-    return QueryResult.fromJson(jsonDecode(response.body));
+    return MessageResult.fromJson(jsonDecode(response.body));
   }
 
   static Future<StatusResult> status() async {
@@ -64,28 +51,14 @@ class ApiService {
   }
 }
 
-class IngestResult {
-  final String summary;
-  final String intent;
-  final List<String> tags;
-
-  IngestResult({required this.summary, required this.intent, required this.tags});
-
-  factory IngestResult.fromJson(Map<String, dynamic> json) => IngestResult(
-        summary: json['summary'],
-        intent: json['intent'],
-        tags: List<String>.from(json['tags']),
-      );
-}
-
-class QueryResult {
+class MessageResult {
   final String response;
   final String mode;
 
-  QueryResult({required this.response, required this.mode});
+  MessageResult({required this.response, required this.mode});
 
-  factory QueryResult.fromJson(Map<String, dynamic> json) =>
-      QueryResult(response: json['response'], mode: json['mode']);
+  factory MessageResult.fromJson(Map<String, dynamic> json) =>
+      MessageResult(response: json['response'], mode: json['mode']);
 }
 
 class StatusResult {
