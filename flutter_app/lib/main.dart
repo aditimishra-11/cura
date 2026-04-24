@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'dart:async';
 import 'screens/chat_screen.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await NotificationService.init();
   runApp(const KnowledgeApp());
 }
 
@@ -38,13 +43,11 @@ class _AppEntryState extends State<AppEntry> {
   void initState() {
     super.initState();
 
-    // Handle URL shared while app is already open
     _intentSub = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
       final url = _extractUrl(value);
       if (url != null) setState(() => _sharedUrl = url);
     });
 
-    // Handle URL shared when app was closed (cold start)
     ReceiveSharingIntent.instance.getInitialMedia().then((value) {
       final url = _extractUrl(value);
       if (url != null) setState(() => _sharedUrl = url);
@@ -67,7 +70,6 @@ class _AppEntryState extends State<AppEntry> {
 
   @override
   Widget build(BuildContext context) {
-    // Pass shared URL to chat screen; it handles ingestion automatically
     return ChatScreen(key: ValueKey(_sharedUrl), sharedUrl: _sharedUrl);
   }
 }

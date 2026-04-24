@@ -71,9 +71,38 @@ def clear_pending_digest():
     _pending_digest = []
 
 
+def check_reminders():
+    """Fire push notifications for any due reminders."""
+    try:
+        from notifications.fcm import send_to_all_devices
+        supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+        now = datetime.now(timezone.utc).isoformat()
+        result = (
+            supabase.table("items")
+            .select("id, title, url, summary, user_note")
+            .lte("remind_at", now)
+            .eq("reminder_sent", False)
+            .execute()
+        )
+        items = result.data or []
+        for item in items:
+            title = item.get("title") or item.get("url", "Saved content")
+            note = item.get("user_note") or item.get("summary") or "Time to revisit this."
+            send_to_all_devices(
+                title=f"📌 Reminder: {title[:60]}",
+                body=note[:120],
+                item_id=item["id"],
+            )
+            supabase.table("items").update({"reminder_sent": True}).eq("id", item["id"]).execute()
+            logger.info(f"Reminder sent for item {item['id']}")
+    except Exception as e:
+        logger.error(f"Reminder check failed: {e}")
+
+
 def start_background_digest() -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     scheduler.add_job(generate_digest, "cron", day_of_week="sun", hour=9, minute=0, id="weekly_digest")
+    scheduler.add_job(check_reminders, "interval", minutes=15, id="reminder_check")
     scheduler.start()
-    logger.info("Weekly digest scheduler started (Sundays 9am).")
+    logger.info("Schedulers started: weekly digest (Sun 9am) + reminder check (every 15min).")
     return scheduler

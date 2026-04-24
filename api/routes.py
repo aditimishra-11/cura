@@ -1,9 +1,11 @@
 import re
+import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import logging
 
 from ingest import ingest_url
+from ingest.reminder_parser import parse_reminder, strip_reminder
 from retrieval import query as rag_query
 
 logger = logging.getLogger(__name__)
@@ -91,14 +93,31 @@ async def message(req: MessageRequest):
             f"**Intent:** {result['intent']}  |  **Tags:** {', '.join(result['tags'])}"
         ]
 
+        remind_at = None
         if note:
-            if REMINDER_RE.search(note):
+            remind_at = parse_reminder(note)
+            clean_note = strip_reminder(note) if remind_at else note
+
+            if remind_at:
+                # Store reminder on the saved item
+                from supabase import create_client
+                supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+                item_id = result["stored"].get("id")
+                if item_id:
+                    supabase.table("items").update({
+                        "remind_at": remind_at.isoformat(),
+                        "user_note": clean_note or None,
+                        "reminder_sent": False,
+                    }).eq("id", item_id).execute()
+
+                from datetime import timezone
+                local_str = remind_at.strftime("%A, %b %d at %I:%M %p UTC")
                 response_parts.append(
-                    f"\n\n📝 **Note saved:** \"{note}\"\n"
-                    "*(Reminder feature coming soon — for now I've tagged this so you can find it with \"what have I noted to try?\")*"
+                    f"\n\n⏰ **Reminder set for {local_str}**\n"
+                    f"I'll send a push notification when it's time."
                 )
-            else:
-                response_parts.append(f"\n\n📝 **Your note:** \"{note}\"")
+            elif clean_note:
+                response_parts.append(f"\n\n📝 **Note:** \"{clean_note}\"")
 
         return {"response": "".join(response_parts), "mode": "ingest", "intent": result["intent"], "tags": result["tags"]}
 
@@ -122,6 +141,18 @@ async def query(req: MessageRequest):
     except Exception as e:
         logger.error(f"Query failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class DeviceRequest(BaseModel):
+    fcm_token: str
+
+
+@router.post("/register-device")
+async def register_device(req: DeviceRequest):
+    from supabase import create_client
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    supabase.table("devices").upsert({"fcm_token": req.fcm_token}, on_conflict="fcm_token").execute()
+    return {"status": "registered"}
 
 
 @router.get("/digest")
