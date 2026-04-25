@@ -76,7 +76,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
             child: Text(
-              "When you save a URL, add "remind me tomorrow" to set a reminder",
+              'When you save a URL, add "remind me tomorrow" to set a reminder',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.outline,
