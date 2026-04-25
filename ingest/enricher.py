@@ -1,9 +1,17 @@
 import json
 import os
-from openai import OpenAI
+from langfuse.openai import OpenAI
+from langfuse.decorators import observe
+
+_client_instance = None
+
 
 def _client():
-    return OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _client_instance
+
 
 SYSTEM_PROMPT = """You are a knowledge assistant that enriches saved content.
 Given a URL, title, and extracted text, return a JSON object with:
@@ -37,6 +45,7 @@ FEW_SHOT = [
 ]
 
 
+@observe(name="enrich")
 def enrich(url: str, title: str | None, text: str | None) -> dict:
     user_content = f"URL: {url}\nTitle: {title or 'Unknown'}\nText: {(text or '')[:3000]}"
 

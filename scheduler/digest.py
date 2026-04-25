@@ -2,9 +2,9 @@ import logging
 import os
 from datetime import datetime, timezone, timedelta
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.schedulers.background import BackgroundScheduler
-from openai import OpenAI
+from langfuse.openai import OpenAI
+from langfuse.decorators import observe
 from supabase import create_client
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ def get_digest_items() -> list[dict]:
     return result.data or []
 
 
+@observe(name="digest")
 def generate_digest():
     global _pending_digest
     items = get_digest_items()

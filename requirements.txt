@@ -9,3 +9,4 @@ trafilatura==1.9.0
 apscheduler==3.10.4
 python-dotenv==1.0.1
 firebase-admin==6.5.0
+langfuse>=2.7.0

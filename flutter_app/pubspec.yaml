@@ -2,7 +2,7 @@ name: cura
 description: Cura - save and retrieve content with AI
 
 publish_to: none
-version: 1.0.0+1
+version: 1.1.0+3
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -17,6 +17,8 @@ dependencies:
   intl: ^0.19.0
   firebase_core: ^2.27.0
   firebase_messaging: ^14.7.20
+  flutter_local_notifications: ^16.3.2
+  url_launcher: ^6.2.5
 
 dev_dependencies:
   flutter_test:

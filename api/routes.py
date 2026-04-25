@@ -1,6 +1,6 @@
 import re
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import logging
 
@@ -20,6 +20,7 @@ class IngestRequest(BaseModel):
 
 class MessageRequest(BaseModel):
     message: str
+    history: list[dict] = []
 
 
 class IngestResponse(BaseModel):
@@ -38,6 +39,11 @@ class StatusResponse(BaseModel):
     by_intent: dict[str, int]
 
 
+class UpdateItemRequest(BaseModel):
+    user_note: str | None = None
+    remind_at: str | None = None  # ISO datetime string
+
+
 REMINDER_RE = re.compile(
     r"\b(remind me|reminder|don't let me forget|follow up|note to self)\b", re.IGNORECASE
 )
@@ -50,10 +56,14 @@ def _note_from_text(text: str, summary: str) -> str | None:
         return None
     if REMINDER_RE.search(text):
         return text
-    # Any meaningful text alongside a URL is a note
     if len(text.split()) >= 3:
         return text
     return None
+
+
+def _get_supabase():
+    from supabase import create_client
+    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
 
 @router.post("/ingest", response_model=IngestResponse)
@@ -99,9 +109,7 @@ async def message(req: MessageRequest):
             clean_note = strip_reminder(note) if remind_at else note
 
             if remind_at:
-                # Store reminder on the saved item
-                from supabase import create_client
-                supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+                supabase = _get_supabase()
                 item_id = result["stored"].get("id")
                 if item_id:
                     supabase.table("items").update({
@@ -110,7 +118,6 @@ async def message(req: MessageRequest):
                         "reminder_sent": False,
                     }).eq("id", item_id).execute()
 
-                from datetime import timezone
                 local_str = remind_at.strftime("%A, %b %d at %I:%M %p UTC")
                 response_parts.append(
                     f"\n\n⏰ **Reminder set for {local_str}**\n"
@@ -121,10 +128,10 @@ async def message(req: MessageRequest):
 
         return {"response": "".join(response_parts), "mode": "ingest", "intent": result["intent"], "tags": result["tags"]}
 
-    # Pure text query
+    # Pure text query — pass conversation history for context
     try:
         mode = detect_mode(text)
-        response = rag_query(text)
+        response = rag_query(text, history=req.history)
         return {"response": response, "mode": mode}
     except Exception as e:
         logger.error(f"Query failed: {e}")
@@ -136,7 +143,7 @@ async def query(req: MessageRequest):
     from retrieval.chain import detect_mode
     try:
         mode = detect_mode(req.message)
-        response = rag_query(req.message)
+        response = rag_query(req.message, history=req.history)
         return QueryResponse(response=response, mode=mode)
     except Exception as e:
         logger.error(f"Query failed: {e}")
@@ -149,8 +156,7 @@ class DeviceRequest(BaseModel):
 
 @router.post("/register-device")
 async def register_device(req: DeviceRequest):
-    from supabase import create_client
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    supabase = _get_supabase()
     supabase.table("devices").upsert({"fcm_token": req.fcm_token}, on_conflict="fcm_token").execute()
     return {"status": "registered"}
 
@@ -167,9 +173,7 @@ async def digest():
 
 @router.get("/status", response_model=StatusResponse)
 async def status():
-    import os
-    from supabase import create_client
-    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    supabase = _get_supabase()
     result = supabase.table("items").select("intent").execute()
     items = result.data or []
     counts: dict[str, int] = {}
@@ -177,3 +181,70 @@ async def status():
         intent = item.get("intent", "unknown")
         counts[intent] = counts.get(intent, 0) + 1
     return StatusResponse(total=len(items), by_intent=counts)
+
+
+# ── Library endpoints ────────────────────────────────────────────────────────
+
+@router.get("/items")
+async def list_items(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    intent: str | None = None,
+):
+    supabase = _get_supabase()
+    q = supabase.table("items").select(
+        "id, url, title, summary, intent, tags, source, created_at, remind_at, user_note, reminder_sent"
+    )
+    if intent:
+        q = q.eq("intent", intent)
+    result = q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    items = result.data or []
+    return {"items": items, "offset": offset, "limit": limit, "count": len(items)}
+
+
+@router.get("/items/{item_id}")
+async def get_item(item_id: str):
+    supabase = _get_supabase()
+    result = (
+        supabase.table("items")
+        .select("id, url, title, summary, intent, tags, source, created_at, remind_at, user_note, reminder_sent")
+        .eq("id", item_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return result.data[0]
+
+
+@router.patch("/items/{item_id}")
+async def update_item(item_id: str, req: UpdateItemRequest):
+    updates: dict = {}
+    if req.user_note is not None:
+        updates["user_note"] = req.user_note
+    if req.remind_at is not None:
+        updates["remind_at"] = req.remind_at
+        updates["reminder_sent"] = False  # reset so it fires again
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    supabase = _get_supabase()
+    result = supabase.table("items").update(updates).eq("id", item_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return result.data[0]
+
+
+# ── Reminders endpoint ───────────────────────────────────────────────────────
+
+@router.get("/reminders")
+async def reminders():
+    supabase = _get_supabase()
+    result = (
+        supabase.table("items")
+        .select("id, url, title, summary, intent, tags, remind_at, user_note, reminder_sent, created_at")
+        .not_.is_("remind_at", "null")
+        .order("remind_at", desc=False)
+        .execute()
+    )
+    return {"reminders": result.data or []}

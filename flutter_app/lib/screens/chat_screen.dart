@@ -40,7 +40,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _messages.add(ChatMessage(
       text: "Hi! Send me a URL to save it, or ask me anything about your saved content.\n\n"
           "Try: *\"teach me about RAG\"*, *\"I'm building a dashboard, what's useful?\"*, "
-          "or *\"what haven't I read yet?\"*\n\n"
+          "or *\"show all my saves\"*\n\n"
           "You can also mix: *\"https://example.com — remind me to try this tomorrow\"*",
       type: BubbleType.assistant,
     ));
@@ -62,9 +62,27 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (_) {}
   }
 
+  /// Build the last 6 chat turns as history for the backend context window.
+  List<Map<String, dynamic>> _buildHistory() {
+    final conversational = _messages
+        .where((m) => m.type == BubbleType.user || m.type == BubbleType.assistant)
+        .toList();
+    final recent = conversational.length > 6
+        ? conversational.sublist(conversational.length - 6)
+        : conversational;
+    return recent
+        .map((m) => {
+              'role': m.type == BubbleType.user ? 'user' : 'assistant',
+              'content': m.text,
+            })
+        .toList();
+  }
+
   Future<void> _send(String text) async {
     text = text.trim();
     if (text.isEmpty || _loading) return;
+
+    final history = _buildHistory();
 
     setState(() {
       _messages.add(ChatMessage(text: text, type: BubbleType.user));
@@ -73,7 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final result = await ApiService.sendMessage(text);
+      final result = await ApiService.sendMessage(text, history: history);
       setState(() {
         _messages.add(ChatMessage(
           text: result.response,
@@ -120,12 +138,12 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Text("Cura"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart),
+            icon: const Icon(Icons.bar_chart_outlined),
             tooltip: "Status",
             onPressed: _showStatus,
           ),
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
@@ -163,19 +181,22 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
               child: TextField(
                 controller: _controller,
-                onSubmitted: (_) => _sendFromInput(),
+                // newline on Enter — send only via button tap
+                textInputAction: TextInputAction.newline,
+                keyboardType: TextInputType.multiline,
+                maxLines: null,
+                minLines: 1,
                 decoration: InputDecoration(
                   hintText: "Send a URL or ask a question…",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   isDense: true,
                 ),
-                textInputAction: TextInputAction.send,
-                maxLines: null,
               ),
             ),
             const SizedBox(width: 8),
@@ -203,15 +224,20 @@ class _ChatScreenState extends State<ChatScreen> {
                 .map((e) => ListTile(
                       leading: const Icon(Icons.label_outline),
                       title: Text(e.key),
-                      trailing: Text("${e.value}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      trailing: Text("${e.value}",
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
                       dense: true,
                     ))
                 .toList(),
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context), child: const Text("Close"))
+          ],
         ),
       );
     } catch (_) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Couldn't reach the server")),
       );
