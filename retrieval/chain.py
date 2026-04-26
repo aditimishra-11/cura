@@ -1,9 +1,16 @@
 import os
-from langfuse.openai import OpenAI
-from langfuse.decorators import observe
+from services.langfuse_compat import OpenAI, observe
 from supabase import create_client
 
-openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+# Lazy client — created on first use to avoid crashing at import time
+# if OPENAI_API_KEY is not yet available in the environment.
+_openai_client = None
+
+def _get_openai():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _openai_client
 
 
 def get_supabase():
@@ -33,7 +40,7 @@ def detect_mode(query: str) -> str:
 
 @observe(name="embed_query")
 def embed_query(query: str) -> list[float]:
-    response = openai_client.embeddings.create(
+    response = _get_openai().embeddings.create(
         model="text-embedding-3-small",
         input=query,
     )
@@ -171,7 +178,7 @@ def query(user_message: str, history: list[dict] | None = None) -> str:
             + history_ctx
             + [{"role": "user", "content": user_message}]
         )
-        response = openai_client.chat.completions.create(
+        response = _get_openai().chat.completions.create(
             model="gpt-4o",
             messages=messages,
             temperature=0.3,
@@ -206,7 +213,7 @@ def query(user_message: str, history: list[dict] | None = None) -> str:
         + history_ctx
         + [{"role": "user", "content": user_message}]
     )
-    response = openai_client.chat.completions.create(
+    response = _get_openai().chat.completions.create(
         model="gpt-4o",
         messages=messages,
         temperature=0.3,

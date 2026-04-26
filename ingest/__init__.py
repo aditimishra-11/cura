@@ -1,4 +1,4 @@
-from langfuse.decorators import observe
+from services.langfuse_compat import observe
 from .extractor import extract_content
 from .enricher import enrich
 from .embedder import store_item

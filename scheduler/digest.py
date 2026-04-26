@@ -3,12 +3,18 @@ import os
 from datetime import datetime, timezone, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from langfuse.openai import OpenAI
-from langfuse.decorators import observe
+from services.langfuse_compat import OpenAI, observe
 from supabase import create_client
 
 logger = logging.getLogger(__name__)
-openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", ""))
+
+_openai_client = None
+
+def _get_openai():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+    return _openai_client
 
 # Digest items are stored here so the app can poll GET /digest
 _pending_digest: list[dict] = []
@@ -53,7 +59,7 @@ def generate_digest():
         f"{i+1}. {item.get('title') or item['url']}\n   {item.get('summary', '')}"
         for i, item in enumerate(items)
     )
-    response = openai_client.chat.completions.create(
+    response = _get_openai().chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": DIGEST_PROMPT.format(items=formatted)}],
         temperature=0.4,

@@ -1,7 +1,6 @@
 import json
 import os
-from langfuse.openai import OpenAI
-from langfuse.decorators import observe
+from services.langfuse_compat import OpenAI, observe
 
 _client_instance = None
 

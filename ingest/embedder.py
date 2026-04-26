@@ -1,6 +1,5 @@
 import os
-from langfuse.openai import OpenAI
-from langfuse.decorators import observe
+from services.langfuse_compat import OpenAI, observe
 from supabase import create_client, Client
 
 _openai_instance = None
