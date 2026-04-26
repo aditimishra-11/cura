@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import re
 import os
+from datetime import timezone, timedelta
 from typing import Optional
+
+IST = timezone(timedelta(hours=5, minutes=30))
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import logging
@@ -138,9 +141,20 @@ async def message(req: MessageRequest):
                     if req.user_email:
                         try:
                             from services.google_calendar_service import create_calendar_event
-                            item_title  = result["stored"].get("title") or url
+                            item_title = result["stored"].get("title") or url
+
+                            # Rich description with all item details
+                            cal_description = (
+                                f"🔗 {url}\n\n"
+                                f"{result['summary']}\n\n"
+                                f"🏷️ Intent: {result['intent'].capitalize()}  |  "
+                                f"Tags: {', '.join(result['tags'])}"
+                            )
+                            if clean_note:
+                                cal_description += f"\n\n📝 {clean_note}"
+
                             cal_event_id = create_calendar_event(
-                                req.user_email, remind_at, item_title, clean_note or ""
+                                req.user_email, remind_at, item_title, cal_description
                             )
                             if cal_event_id:
                                 reminder_row["calendar_event_id"] = cal_event_id
@@ -149,7 +163,8 @@ async def message(req: MessageRequest):
 
                     supabase.table("user_reminders").insert(reminder_row).execute()
 
-                local_str = remind_at.strftime("%A, %b %d at %I:%M %p UTC")
+                ist_time  = remind_at.astimezone(IST)
+                local_str = ist_time.strftime("%A, %b %d at %I:%M %p IST")
                 response_parts.append(
                     f"\n\n⏰ **Reminder set for {local_str}**\n"
                     f"I'll send a push notification when it's time."

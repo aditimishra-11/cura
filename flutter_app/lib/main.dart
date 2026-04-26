@@ -7,6 +7,8 @@ import 'dart:async';
 import 'screens/chat_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/reminders_screen.dart';
+import 'screens/sign_in_screen.dart';
+import 'services/api_service.dart';
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
 
@@ -152,7 +154,7 @@ class KnowledgeApp extends StatelessWidget {
   }
 }
 
-// ── App entry — handles share intent ────────────────────────────────────────
+// ── App entry — auth gate + share intent ────────────────────────────────────
 class AppEntry extends StatefulWidget {
   const AppEntry({super.key});
   @override
@@ -162,10 +164,13 @@ class AppEntry extends StatefulWidget {
 class _AppEntryState extends State<AppEntry> {
   StreamSubscription? _intentSub;
   String? _sharedUrl;
+  String? _userEmail;
+  bool    _checking = true;
 
   @override
   void initState() {
     super.initState();
+    _checkAuth();
     _intentSub = ReceiveSharingIntent.instance.getMediaStream().listen((value) {
       final url = _extractUrl(value);
       if (url != null) setState(() => _sharedUrl = url);
@@ -175,6 +180,20 @@ class _AppEntryState extends State<AppEntry> {
       if (url != null) setState(() => _sharedUrl = url);
       ReceiveSharingIntent.instance.reset();
     });
+  }
+
+  Future<void> _checkAuth() async {
+    final email = await ApiService.getUserEmail();
+    if (mounted) setState(() { _userEmail = email; _checking = false; });
+  }
+
+  void _onSignedIn() async {
+    final email = await ApiService.getUserEmail();
+    if (mounted) setState(() => _userEmail = email);
+  }
+
+  void _onSignedOut() {
+    if (mounted) setState(() => _userEmail = null);
   }
 
   String? _extractUrl(List<SharedMediaFile> files) {
@@ -192,14 +211,28 @@ class _AppEntryState extends State<AppEntry> {
 
   @override
   Widget build(BuildContext context) {
-    return MainShell(key: ValueKey(_sharedUrl), sharedUrl: _sharedUrl);
+    if (_checking) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F0E17),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFFA78BFA))),
+      );
+    }
+    if (_userEmail == null) {
+      return SignInScreen(onSignedIn: _onSignedIn);
+    }
+    return MainShell(
+      key: ValueKey(_sharedUrl),
+      sharedUrl: _sharedUrl,
+      onSignOut: _onSignedOut,
+    );
   }
 }
 
 // ── Main shell — custom bottom nav + IndexedStack ────────────────────────────
 class MainShell extends StatefulWidget {
   final String? sharedUrl;
-  const MainShell({super.key, this.sharedUrl});
+  final VoidCallback? onSignOut;
+  const MainShell({super.key, this.sharedUrl, this.onSignOut});
   @override
   State<MainShell> createState() => _MainShellState();
 }
@@ -247,6 +280,7 @@ class _MainShellState extends State<MainShell> {
             sharedUrl: widget.sharedUrl,
             onSwitchToChat: switchToChat,
             onItemSaved: onItemSaved,
+            onSignOut: widget.onSignOut,
           ),
           LibraryScreen(refreshTrigger: _libraryRefresh),
           RemindersScreen(refreshTrigger: _remindersRefresh),

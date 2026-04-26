@@ -43,8 +43,9 @@ class ChatScreen extends StatefulWidget {
   final String? sharedUrl;
   final VoidCallback? onSwitchToChat;
   final VoidCallback? onItemSaved;
+  final VoidCallback? onSignOut;
 
-  const ChatScreen({super.key, this.sharedUrl, this.onSwitchToChat, this.onItemSaved});
+  const ChatScreen({super.key, this.sharedUrl, this.onSwitchToChat, this.onItemSaved, this.onSignOut});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -204,7 +205,9 @@ class _ChatScreenState extends State<ChatScreen> {
             icon: Icons.settings_outlined,
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              MaterialPageRoute(
+                builder: (_) => SettingsScreen(onSignOut: widget.onSignOut),
+              ),
             ),
           ),
           const SizedBox(width: 12),

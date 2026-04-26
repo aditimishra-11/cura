@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../config.dart';
 import '../services/api_service.dart';
-import '../services/notification_service.dart';
 
-final _googleSignIn = GoogleSignIn(
-  scopes: [
-    'email',
-    'https://www.googleapis.com/auth/calendar.events',
-  ],
-  serverClientId: AppConfig.googleWebClientId.isNotEmpty
-      ? AppConfig.googleWebClientId
-      : null,
-);
+const _bg      = Color(0xFF0F0E17);
+const _surface2= Color(0xFF1E1D2C);
+const _surface3= Color(0xFF262537);
+const _border  = Color(0xFF2C2B3D);
+const _text1   = Color(0xFFEDECF4);
+const _text2   = Color(0xFF9B9AAE);
+const _text3   = Color(0xFF5C5B72);
+const _accent  = Color(0xFFA78BFA);
+const _red     = Color(0xFFF87171);
+const _redBg   = Color(0x1AF87171);
+
+final _googleSignIn = GoogleSignIn(scopes: ['email']);
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onSignOut;
+  const SettingsScreen({super.key, this.onSignOut});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -24,12 +27,9 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _urlController = TextEditingController();
   bool _urlSaved = false;
-
-  // Google Calendar state
-  bool _googleLoading = true;
+  String? _userEmail;
   bool _googleConnected = false;
-  String? _googleEmail;
-  String? _googleError;
+  bool _calLoading = true;
 
   @override
   void initState() {
@@ -37,22 +37,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ApiService.getBaseUrl().then((url) {
       if (mounted) setState(() => _urlController.text = url);
     });
-    _loadGoogleStatus();
+    ApiService.getUserEmail().then((email) {
+      setState(() => _userEmail = email);
+      if (email != null) _loadCalendarStatus(email);
+    });
   }
 
-  Future<void> _loadGoogleStatus() async {
-    setState(() { _googleLoading = true; _googleError = null; });
+  Future<void> _loadCalendarStatus(String email) async {
+    setState(() => _calLoading = true);
     try {
       final status = await ApiService.googleStatus();
-      if (mounted) {
-        setState(() {
-          _googleConnected = status.connected;
-          _googleEmail = status.email;
-          _googleLoading = false;
-        });
-      }
+      if (mounted) setState(() { _googleConnected = status.connected; _calLoading = false; });
     } catch (_) {
-      if (mounted) setState(() { _googleLoading = false; });
+      if (mounted) setState(() => _calLoading = false);
     }
   }
 
@@ -64,123 +61,187 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _connectGoogle() async {
-    setState(() { _googleLoading = true; _googleError = null; });
-    try {
-      // Trigger Google sign-in to obtain serverAuthCode
-      final account = await _googleSignIn.signIn();
-      if (account == null) {
-        setState(() { _googleLoading = false; });
-        return; // user cancelled
-      }
-
-      final auth = await account.authentication;
-      final serverAuthCode = account.serverAuthCode;
-
-      if (serverAuthCode == null) {
-        setState(() {
-          _googleLoading = false;
-          _googleError = 'Could not get server auth code. Make sure the OAuth client ID is configured correctly.';
-        });
-        return;
-      }
-
-      final status = await ApiService.connectGoogle(
-        serverAuthCode: serverAuthCode,
-        email: account.email,
-      );
-
-      // Re-register FCM token now that we have user_email
-      await NotificationService.reRegister();
-
-      if (mounted) {
-        setState(() {
-          _googleConnected = status.connected;
-          _googleEmail = status.email ?? account.email;
-          _googleLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _googleLoading = false;
-          _googleError = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
-    }
-  }
-
-  Future<void> _disconnectGoogle() async {
+  Future<void> _signOut() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Disconnect Google Calendar?'),
-        content: const Text(
-          'Future reminders will no longer create calendar events. Existing events are not deleted.',
+        backgroundColor: _surface2,
+        title: Text('Sign out?', style: TextStyle(color: _text1)),
+        content: Text(
+          'You will need to sign in again to use Cura.',
+          style: TextStyle(color: _text2),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Cancel', style: TextStyle(color: _accent)),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Disconnect'),
+            style: FilledButton.styleFrom(backgroundColor: _red),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
     );
     if (confirmed != true) return;
 
-    setState(() { _googleLoading = true; _googleError = null; });
     try {
       await ApiService.disconnectGoogle();
-      await _googleSignIn.signOut();
-      // Re-register FCM token without user_email
-      await NotificationService.reRegister();
-      if (mounted) {
-        setState(() {
-          _googleConnected = false;
-          _googleEmail = null;
-          _googleLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _googleLoading = false;
-          _googleError = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
+    } catch (_) {
+      // Clear locally even if backend call fails
+      await ApiService.clearUserEmail();
     }
+    await _googleSignIn.signOut();
+
+    widget.onSignOut?.call();
+    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        title: Text('Settings',
+            style: TextStyle(color: _text1, fontWeight: FontWeight.w700)),
+        iconTheme: const IconThemeData(color: _text2),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: const Color(0xFF232232)),
+        ),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
+            // ── Account ───────────────────────────────────────────────────
+            Text('Account',
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700, color: _text1, fontSize: 13)),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _surface2,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _border),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                        color: _surface3, shape: BoxShape.circle),
+                    child: const Icon(Icons.person, color: _accent, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Signed in',
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: _text3,
+                                fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 2),
+                        Text(_userEmail ?? '—',
+                            style: GoogleFonts.inter(
+                                fontSize: 13.5, color: _text1,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Google Calendar status
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: _surface2,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _border),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_month,
+                      size: 18,
+                      color: _calLoading
+                          ? _text3
+                          : _googleConnected ? _accent : _text3),
+                  const SizedBox(width: 10),
+                  Text(
+                    _calLoading
+                        ? 'Checking Calendar…'
+                        : _googleConnected
+                            ? 'Google Calendar connected'
+                            : 'Google Calendar not connected',
+                    style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: _calLoading
+                            ? _text3
+                            : _googleConnected ? _accent : _text3),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.logout, size: 16),
+                label: const Text('Sign Out'),
+                onPressed: _signOut,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _red,
+                  side: const BorderSide(color: _red),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+            const Divider(color: Color(0xFF232232)),
+            const SizedBox(height: 20),
+
             // ── API Server URL ─────────────────────────────────────────────
             Text('API Server URL',
-                style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w700, color: _text1, fontSize: 13)),
             const SizedBox(height: 8),
             TextField(
               controller: _urlController,
+              style: GoogleFonts.inter(fontSize: 13, color: _text2),
               decoration: InputDecoration(
                 hintText: 'https://your-render-app.onrender.com',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _border)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _border)),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _accent)),
+                filled: true,
+                fillColor: _surface3,
               ),
               keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 8),
             Text(
-              'For local testing on Android emulator use http://10.0.2.2:8000\n'
-              'For Render deploy use your Render URL.',
-              style: TextStyle(fontSize: 12, color: cs.outline),
+              'For local testing use http://10.0.2.2:8000',
+              style: GoogleFonts.inter(fontSize: 11, color: _text3),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -190,113 +251,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Text(_urlSaved ? 'Saved ✓' : 'Save'),
               ),
             ),
-
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 20),
-
-            // ── Google Calendar ────────────────────────────────────────────
-            Row(
-              children: [
-                Image.network(
-                  'https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg',
-                  width: 24,
-                  height: 24,
-                  errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.calendar_month, size: 24),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  'Google Calendar',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: cs.onSurface),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Connect your Google Calendar so reminders also create calendar events.',
-              style: TextStyle(fontSize: 13, color: cs.outline),
-            ),
-            const SizedBox(height: 16),
-
-            if (_googleLoading)
-              const Center(child: CircularProgressIndicator())
-            else if (_googleConnected) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: cs.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Connected',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: cs.onPrimaryContainer)),
-                          if (_googleEmail != null)
-                            Text(_googleEmail!,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: cs.onPrimaryContainer)),
-                        ],
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _disconnectGoogle,
-                      child: Text('Disconnect',
-                          style: TextStyle(color: cs.error)),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.login),
-                  label: const Text('Connect Google Calendar'),
-                  onPressed: _connectGoogle,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-            ],
-
-            if (_googleError != null) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.errorContainer,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: cs.error, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(_googleError!,
-                          style:
-                              TextStyle(color: cs.onErrorContainer, fontSize: 13)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
             const SizedBox(height: 24),
           ],
         ),
