@@ -21,5 +21,5 @@ class AppConfig {
   // Web Application OAuth 2.0 Client ID from Google Cloud Console.
   // Must match the GOOGLE_CLIENT_ID env var on your Render backend.
   static const String googleWebClientId =
-      ''; // TODO: paste your Web Client ID here
+      '594980338208-dvm0a89fl7kbv0vd3b7nfhnrqt4ebcbn.apps.googleusercontent.com';
 }
