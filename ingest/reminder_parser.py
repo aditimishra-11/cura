@@ -9,8 +9,8 @@ REMINDER_PATTERNS = [
     (r"remind me tomorrow\s+(morning|afternoon|evening|night)", "tomorrow_period"),
     # "remind me tomorrow"
     (r"remind me tomorrow", "tomorrow"),
-    # "remind me in 2 mins/hours/days"
-    (r"remind me in (\d+)\s+(minute|minutes|min|mins|hour|hours|day|days|week|weeks)", "in_duration"),
+    # "remind me in 2 mins" OR "remind me to try this in 2 mins"
+    (r"remind\s+me\b.*?\bin\s+(\d+)\s+(minute|minutes|min|mins|hour|hours|day|days|week|weeks)", "in_duration"),
     # "remind me next week/monday/..."
     (r"remind me next\s+(week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)", "next_period"),
     # "follow up in 3 days"
@@ -23,6 +23,8 @@ REMINDER_PATTERNS = [
     (r"\bnext week\b", "next_week"),
     # "in X days"
     (r"\bin (\d+) (day|days)\b", "in_days"),
+    # bare "in X mins/hours" fallback (catches any reminder-context phrase)
+    (r"\bin\s+(\d+)\s+(minute|minutes|min|mins|hour|hours)\b", "in_duration"),
 ]
 
 PERIOD_HOURS = {

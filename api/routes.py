@@ -47,6 +47,11 @@ class UpdateItemRequest(BaseModel):
     remind_at: Optional[str] = None  # ISO datetime string
 
 
+class GoogleAuthRequest(BaseModel):
+    server_auth_code: str
+    email: Optional[str] = None
+
+
 REMINDER_RE = re.compile(
     r"\b(remind me|reminder|don't let me forget|follow up|note to self)\b", re.IGNORECASE
 )
@@ -120,6 +125,18 @@ async def message(req: MessageRequest):
                         "user_note": clean_note or None,
                         "reminder_sent": False,
                     }).eq("id", item_id).execute()
+
+                    # Create Google Calendar event (non-fatal if Google not connected)
+                    try:
+                        from services.google_calendar_service import create_calendar_event
+                        item_title = result["stored"].get("title") or url
+                        cal_event_id = create_calendar_event(remind_at, item_title, clean_note or "")
+                        if cal_event_id:
+                            supabase.table("items").update(
+                                {"calendar_event_id": cal_event_id}
+                            ).eq("id", item_id).execute()
+                    except Exception as cal_err:
+                        logger.warning("Calendar event creation skipped: %s", cal_err)
 
                 local_str = remind_at.strftime("%A, %b %d at %I:%M %p UTC")
                 response_parts.append(
@@ -251,3 +268,28 @@ async def reminders():
         .execute()
     )
     return {"reminders": result.data or []}
+
+
+# ── Google Calendar auth endpoints ──────────────────────────────────────────
+
+@router.post("/auth/google")
+async def connect_google(req: GoogleAuthRequest):
+    from services.google_calendar_service import connect
+    try:
+        return connect(req.server_auth_code, req.email)
+    except Exception as e:
+        logger.error("Google auth failed: %s", e)
+        raise HTTPException(status_code=400, detail=f"Google auth failed: {str(e)}")
+
+
+@router.get("/auth/google/status")
+async def google_auth_status():
+    from services.google_calendar_service import get_status
+    return get_status()
+
+
+@router.delete("/auth/google")
+async def disconnect_google():
+    from services.google_calendar_service import disconnect
+    disconnect()
+    return {"status": "disconnected"}

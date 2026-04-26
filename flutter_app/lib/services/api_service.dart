@@ -111,6 +111,43 @@ class ApiService {
         .map((j) => SavedItem.fromJson(j))
         .toList();
   }
+
+  // ── Google Calendar auth ──────────────────────────────────────────────────
+
+  static Future<GoogleAuthStatus> googleStatus() async {
+    final base = await getBaseUrl();
+    final response = await http.get(Uri.parse('$base/auth/google/status'))
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) throw Exception('Failed to fetch Google status');
+    return GoogleAuthStatus.fromJson(jsonDecode(response.body));
+  }
+
+  static Future<GoogleAuthStatus> connectGoogle({
+    required String serverAuthCode,
+    String? email,
+  }) async {
+    final base = await getBaseUrl();
+    final response = await http.post(
+      Uri.parse('$base/auth/google'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'server_auth_code': serverAuthCode,
+        if (email != null) 'email': email,
+      }),
+    ).timeout(const Duration(seconds: 30));
+    if (response.statusCode != 200) {
+      final detail = jsonDecode(response.body)['detail'] ?? 'Google auth failed';
+      throw Exception(detail);
+    }
+    return GoogleAuthStatus.fromJson(jsonDecode(response.body));
+  }
+
+  static Future<void> disconnectGoogle() async {
+    final base = await getBaseUrl();
+    final response = await http.delete(Uri.parse('$base/auth/google'))
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode != 200) throw Exception('Failed to disconnect Google');
+  }
 }
 
 // ── Models ────────────────────────────────────────────────────────────────────
@@ -209,5 +246,18 @@ class LibraryResult {
         items: (json['items'] as List).map((j) => SavedItem.fromJson(j)).toList(),
         offset: json['offset'] ?? 0,
         count: json['count'] ?? 0,
+      );
+}
+
+class GoogleAuthStatus {
+  final bool connected;
+  final String? email;
+
+  GoogleAuthStatus({required this.connected, this.email});
+
+  factory GoogleAuthStatus.fromJson(Map<String, dynamic> json) =>
+      GoogleAuthStatus(
+        connected: json['connected'] ?? false,
+        email: json['email'],
       );
 }
