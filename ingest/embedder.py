@@ -38,7 +38,9 @@ def store_item(
     embedding = embed_text(embed_input)
 
     supabase = get_supabase()
-    result = supabase.table("items").insert({
+    # Upsert on url: re-saving the same link refreshes content instead of
+    # creating a duplicate row.
+    result = supabase.table("items").upsert({
         "url": url,
         "title": title,
         "raw_text": raw_text,
@@ -47,6 +49,6 @@ def store_item(
         "tags": tags,
         "source": source,
         "embedding": embedding,
-    }).execute()
+    }, on_conflict="url").execute()
 
     return result.data[0] if result.data else {}

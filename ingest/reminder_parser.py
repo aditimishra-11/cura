@@ -9,8 +9,8 @@ REMINDER_PATTERNS = [
     (r"remind me tomorrow\s+(morning|afternoon|evening|night)", "tomorrow_period"),
     # "remind me tomorrow"
     (r"remind me tomorrow", "tomorrow"),
-    # "remind me in 2 days/hours"
-    (r"remind me in (\d+)\s+(hour|hours|day|days|week|weeks)", "in_duration"),
+    # "remind me in 2 mins/hours/days"
+    (r"remind me in (\d+)\s+(minute|minutes|min|mins|hour|hours|day|days|week|weeks)", "in_duration"),
     # "remind me next week/monday/..."
     (r"remind me next\s+(week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)", "next_period"),
     # "follow up in 3 days"
@@ -68,8 +68,10 @@ def parse_reminder(text: str) -> datetime | None:
 
         if kind in ("in_duration", "followup_in"):
             amount = int(m.group(1))
-            unit = m.group(2).rstrip("s")
-            if unit == "hour":
+            unit = m.group(2).rstrip("s")  # normalise plural
+            if unit in ("minute", "min"):
+                return now + timedelta(minutes=amount)
+            elif unit == "hour":
                 return now + timedelta(hours=amount)
             elif unit == "day":
                 return (now + timedelta(days=amount)).replace(hour=9, minute=0, second=0, microsecond=0)
