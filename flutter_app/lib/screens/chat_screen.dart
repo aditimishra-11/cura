@@ -42,8 +42,9 @@ const _quickChips = [
 class ChatScreen extends StatefulWidget {
   final String? sharedUrl;
   final VoidCallback? onSwitchToChat;
+  final VoidCallback? onItemSaved;
 
-  const ChatScreen({super.key, this.sharedUrl, this.onSwitchToChat});
+  const ChatScreen({super.key, this.sharedUrl, this.onSwitchToChat, this.onItemSaved});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -139,6 +140,10 @@ class _ChatScreenState extends State<ChatScreen> {
           label: result.mode,
         ));
       });
+      // Notify parent to refresh Library + Reminders when a URL was saved
+      if (result.mode == 'ingest') {
+        widget.onItemSaved?.call();
+      }
     } catch (e) {
       setState(() {
         _messages.add(ChatMessage(

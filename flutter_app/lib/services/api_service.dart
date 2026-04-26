@@ -39,7 +39,7 @@ class ApiService {
   static Future<StatusResult> status() async {
     final base = await getBaseUrl();
     final response = await http.get(Uri.parse('$base/status'))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) throw Exception('Status fetch failed');
     return StatusResult.fromJson(jsonDecode(response.body));
   }
@@ -67,7 +67,7 @@ class ApiService {
       'offset': '$offset',
       if (intent != null) 'intent': intent,
     });
-    final response = await http.get(uri).timeout(const Duration(seconds: 15));
+    final response = await http.get(uri).timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) throw Exception('Failed to load library');
     return LibraryResult.fromJson(jsonDecode(response.body));
   }
@@ -104,7 +104,7 @@ class ApiService {
   static Future<List<SavedItem>> fetchReminders() async {
     final base = await getBaseUrl();
     final response = await http.get(Uri.parse('$base/reminders'))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) throw Exception('Failed to load reminders');
     final data = jsonDecode(response.body);
     return (data['reminders'] as List)

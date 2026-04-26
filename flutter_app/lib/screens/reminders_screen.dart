@@ -20,7 +20,8 @@ const _green      = Color(0xFF34D399);
 const _greenBg    = Color(0x1A34D399);
 
 class RemindersScreen extends StatefulWidget {
-  const RemindersScreen({super.key});
+  final int refreshTrigger;
+  const RemindersScreen({super.key, this.refreshTrigger = 0});
 
   @override
   State<RemindersScreen> createState() => _RemindersScreenState();
@@ -34,6 +35,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(RemindersScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _load();
+    }
   }
 
   Future<void> _load() async {

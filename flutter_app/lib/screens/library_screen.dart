@@ -43,7 +43,8 @@ const _intentIcons = {
 const _filterPills = ['all', 'learn', 'build', 'inspire', 'reference'];
 
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key});
+  final int refreshTrigger;
+  const LibraryScreen({super.key, this.refreshTrigger = 0});
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -66,6 +67,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.initState();
     _load(reset: true);
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(LibraryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _load(reset: true);
+    }
   }
 
   @override

@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import re
 import os
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import logging
@@ -40,8 +43,8 @@ class StatusResponse(BaseModel):
 
 
 class UpdateItemRequest(BaseModel):
-    user_note: str | None = None
-    remind_at: str | None = None  # ISO datetime string
+    user_note: Optional[str] = None
+    remind_at: Optional[str] = None  # ISO datetime string
 
 
 REMINDER_RE = re.compile(
@@ -189,7 +192,7 @@ async def status():
 async def list_items(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    intent: str | None = None,
+    intent: Optional[str] = None,
 ):
     supabase = _get_supabase()
     q = supabase.table("items").select(

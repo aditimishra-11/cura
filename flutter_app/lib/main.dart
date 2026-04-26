@@ -206,6 +206,8 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _currentIndex = 0;
+  int _libraryRefresh = 0;
+  int _remindersRefresh = 0;
 
   @override
   void didUpdateWidget(MainShell oldWidget) {
@@ -217,20 +219,42 @@ class _MainShellState extends State<MainShell> {
 
   void switchToChat() => setState(() => _currentIndex = 0);
 
+  /// Called by ChatScreen after a successful URL save so Library/Reminders
+  /// pick up the new item without requiring the user to manually switch tabs.
+  void onItemSaved() {
+    setState(() {
+      _libraryRefresh++;
+      _remindersRefresh++;
+    });
+  }
+
+  void _onTabTap(int i) {
+    setState(() {
+      _currentIndex = i;
+      // Always refresh data when the user navigates to Library or Reminders
+      if (i == 1) _libraryRefresh++;
+      if (i == 2) _remindersRefresh++;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          ChatScreen(sharedUrl: widget.sharedUrl, onSwitchToChat: switchToChat),
-          const LibraryScreen(),
-          const RemindersScreen(),
+          ChatScreen(
+            sharedUrl: widget.sharedUrl,
+            onSwitchToChat: switchToChat,
+            onItemSaved: onItemSaved,
+          ),
+          LibraryScreen(refreshTrigger: _libraryRefresh),
+          RemindersScreen(refreshTrigger: _remindersRefresh),
         ],
       ),
       bottomNavigationBar: _CuraBottomNav(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: _onTabTap,
       ),
     );
   }
