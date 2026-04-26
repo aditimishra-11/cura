@@ -1,8 +1,43 @@
 import re
 import urllib.request
+import urllib.parse
 import json
 import trafilatura
 from trafilatura.settings import use_config
+
+# Query params that carry no semantic content — strip these before storing
+_TRACKING_PARAMS = {
+    # UTM
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+    "utm_id", "utm_reader", "utm_name", "utm_social", "utm_social-type",
+    # Ad / click tracking
+    "fbclid", "gclid", "gclsrc", "dclid", "msclkid", "twclid", "ttclid",
+    "li_fat_id", "igshid", "s_kwcid",
+    # Referral / share
+    "ref", "referer", "referrer", "source", "src", "via",
+    # Other noise
+    "feature", "app", "from", "share", "si",
+}
+
+
+def normalize_url(url: str) -> str:
+    """Strip tracking params, sort remaining params, normalise trailing slash."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        # Lowercase scheme + host
+        scheme = parsed.scheme.lower()
+        netloc = parsed.netloc.lower()
+        # Remove trailing slash from path (except bare root "/")
+        path = parsed.path.rstrip("/") or "/"
+        # Filter & sort query params
+        qs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=False)
+        qs_clean = sorted(
+            (k, v) for k, v in qs if k.lower() not in _TRACKING_PARAMS
+        )
+        query = urllib.parse.urlencode(qs_clean)
+        return urllib.parse.urlunparse((scheme, netloc, path, parsed.params, query, ""))
+    except Exception:
+        return url
 
 
 def extract_source(url: str) -> str:
@@ -44,6 +79,7 @@ def _extract_github(url: str) -> dict:
 
 
 def extract_content(url: str) -> dict:
+    url = normalize_url(url)
     source = extract_source(url)
 
     # Use GitHub API for GitHub repo URLs — trafilatura gets poor results
