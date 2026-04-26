@@ -1,10 +1,9 @@
 """
 Langfuse compatibility shim.
 
-If LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are set, use the langfuse-
-instrumented OpenAI client and @observe decorator for full tracing.
-Otherwise fall back to the plain openai client and a no-op decorator so
-the app starts cleanly without Langfuse configured.
+Tries langfuse 2.x API (langfuse.decorators + langfuse.openai) first.
+Falls back to plain openai + no-op @observe if langfuse isn't installed,
+keys aren't set, or the import fails for any reason.
 """
 from __future__ import annotations
 
@@ -13,33 +12,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-_langfuse_enabled = bool(
+_keys_set = bool(
     os.environ.get("LANGFUSE_PUBLIC_KEY") and os.environ.get("LANGFUSE_SECRET_KEY")
 )
 
-if _langfuse_enabled:
+if _keys_set:
     try:
-        from langfuse.openai import OpenAI  # type: ignore
+        from langfuse.openai import OpenAI   # type: ignore
         from langfuse.decorators import observe  # type: ignore
-        logger.info("Langfuse tracing enabled.")
+        logger.info("Langfuse tracing enabled (langfuse.decorators API).")
     except Exception as exc:
-        logger.warning("Langfuse import failed (%s); falling back to plain OpenAI.", exc)
+        logger.warning("Langfuse import failed (%s); tracing disabled.", exc)
         from openai import OpenAI  # type: ignore  # noqa: F811
-        _langfuse_enabled = False
 
-        def observe(_func=None, **_kwargs):  # type: ignore
+        def observe(_func=None, **_kw):  # type: ignore
             if _func is not None:
                 return _func
-            def _decorator(f):
-                return f
-            return _decorator
+            def _d(f): return f
+            return _d
 else:
     from openai import OpenAI  # type: ignore
-    logger.info("Langfuse keys not set — tracing disabled, using plain OpenAI.")
+    logger.info("LANGFUSE_PUBLIC_KEY not set — tracing disabled.")
 
-    def observe(_func=None, **_kwargs):  # type: ignore
+    def observe(_func=None, **_kw):  # type: ignore
         if _func is not None:
             return _func
-        def _decorator(f):
-            return f
-        return _decorator
+        def _d(f): return f
+        return _d
