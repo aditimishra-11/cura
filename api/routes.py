@@ -334,6 +334,22 @@ async def reminders(user_email: Optional[str] = Query(default=None)):
     return {"reminders": reminders_list}
 
 
+# ── Manual reminder trigger (called by external cron every 2 min) ───────────
+
+@router.get("/check-reminders")
+async def trigger_reminder_check():
+    """Lightweight endpoint pinged by an external cron service.
+    Runs the reminder check immediately so we don't depend on APScheduler
+    staying alive on Render's free tier (which spins down between requests)."""
+    try:
+        from scheduler.digest import check_reminders
+        check_reminders()
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error("Manual reminder check failed: %s", e)
+        return {"status": "error", "detail": str(e)}
+
+
 # ── Google Calendar auth endpoints ──────────────────────────────────────────
 
 @router.post("/auth/google")
