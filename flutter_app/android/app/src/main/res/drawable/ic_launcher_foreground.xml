@@ -8,23 +8,23 @@
   <!-- Connection lines from centre to each satellite -->
   <path
       android:fillColor="#00000000"
-      android:strokeColor="#FFFFFF"
+      android:strokeColor="#A78BFA"
       android:strokeWidth="2.5"
       android:strokeAlpha="0.45"
       android:pathData="M54,52 L35,38 M54,52 L73,38 M54,52 L35,66 M54,52 L73,66"/>
 
-  <!-- Satellite nodes -->
-  <path android:fillColor="#FFFFFF" android:fillAlpha="0.6"
+  <!-- Satellite nodes (#A78BFA at 60% opacity) -->
+  <path android:fillColor="#A78BFA" android:fillAlpha="0.6"
         android:pathData="M35,38 m-5.5,0 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0"/>
-  <path android:fillColor="#FFFFFF" android:fillAlpha="0.6"
+  <path android:fillColor="#A78BFA" android:fillAlpha="0.6"
         android:pathData="M73,38 m-5.5,0 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0"/>
-  <path android:fillColor="#FFFFFF" android:fillAlpha="0.6"
+  <path android:fillColor="#A78BFA" android:fillAlpha="0.6"
         android:pathData="M35,66 m-5.5,0 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0"/>
-  <path android:fillColor="#FFFFFF" android:fillAlpha="0.6"
+  <path android:fillColor="#A78BFA" android:fillAlpha="0.6"
         android:pathData="M73,66 m-5.5,0 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0"/>
 
-  <!-- Central node (larger, fully opaque) -->
-  <path android:fillColor="#FFFFFF"
+  <!-- Central node (fully opaque, slightly lighter) -->
+  <path android:fillColor="#C4B5FD"
         android:pathData="M54,52 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0"/>
 
 </vector>

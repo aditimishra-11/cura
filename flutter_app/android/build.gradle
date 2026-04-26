@@ -3,6 +3,17 @@ allprojects {
         google()
         mavenCentral()
     }
+    // Substitute any exact AGP 8.5.0 requests with 8.5.1 (cached locally)
+    configurations.all {
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'com.android.tools.build' &&
+                details.requested.name == 'gradle' &&
+                details.requested.version == '8.5.0') {
+                details.useVersion '8.5.1'
+                details.because 'AGP 8.5.0 unavailable offline; 8.5.1 cached locally'
+            }
+        }
+    }
 }
 
 rootProject.buildDir = "../build"
