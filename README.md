@@ -2,6 +2,18 @@
 
 A personal knowledge assistant for Android. Save URLs from anywhere, enrich them with AI, retrieve them by intent — and never lose a link again.
 
+## What's new in v1.0.3
+
+**Full dark UI redesign** — the app now matches the design spec exactly:
+
+- **Dark theme** — `#0F0E17` background, Inter font throughout, full dark `ColorScheme`
+- **Custom bottom nav** — 68px pill-style nav with 52×28px active indicator in `#A78BFA`
+- **Chat improvements** — Cura gradient avatar on every assistant bubble, animated 3-dot typing indicator, quick-action chips row (What's new / Teach me / Help me build / Digest), URL share preview card with optional note field before saving
+- **Library redesign** — 2-column card grid, live search bar, pill-shaped intent filters, cards with favicon initial + domain + intent dot + 3-line summary + intent badge
+- **Item detail sheet** — favicon + domain header, open-URL circle button, amber-tinted note box, "Ask Cura" and "Open URL" action buttons
+- **Reminders redesign** — 3px coloured left-border cards (red/amber/purple), 34×34px icon squares, green "Done" chip, groups: Overdue / Today / This Week / Later
+- **Dark app icon** — `#0F0E17` background with `#A78BFA` purple connected-nodes logo
+
 ## What's new in v2
 
 - **Three-tab app** — Chat · Library · Reminders
@@ -90,6 +102,7 @@ python main.py
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) ≥ 3.22
 - Android Studio / VS Code with Flutter extension
 - JDK 17
+- Android Gradle Plugin 8.5.1 · Gradle 8.7 · Kotlin 1.9.22 (bundled in project)
 
 ### Run
 
@@ -171,5 +184,24 @@ flutter build apk --release
         │   ├── api_service.dart
         │   └── notification_service.dart
         └── widgets/
-            └── chat_bubble.dart
+            └── chat_bubble.dart   # Cura avatar, bubble colours, typing dots, mode tag
 ```
+
+## Design system
+
+| Token | Value | Usage |
+|---|---|---|
+| `--bg` | `#0F0E17` | App background |
+| `--surface-2` | `#1E1D2C` | Cards, bottom nav, input bar |
+| `--surface-3` | `#262537` | Assistant bubbles, filter pills, icon buttons |
+| `--surface-4` | `#2E2D40` | Secondary action buttons |
+| `--accent` | `#A78BFA` | Primary colour, send button, active nav |
+| `--accent-dim` | `#7C6DB5` | User chat bubbles |
+| `--text-1` | `#EDECF4` | Primary text |
+| `--text-2` | `#9B9AAE` | Secondary text |
+| `--text-3` | `#5C5B72` | Placeholder / muted |
+| `--learn` | `#818CF8` | Learn intent |
+| `--build` | `#34D399` | Build intent |
+| `--inspire` | `#FBBF24` | Inspire intent / Today reminders |
+| `--reference` | `#6EE7B7` | Reference intent |
+| `--red` | `#F87171` | Overdue reminders, errors |
