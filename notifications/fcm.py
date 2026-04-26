@@ -54,11 +54,26 @@ def send_reminder(fcm_token: str, title: str, body: str, item_id: str):
         return False
 
 
-def send_to_all_devices(title: str, body: str, item_id: str):
-    import os
+def send_to_user_devices(user_email: str, title: str, body: str, item_id: str):
+    """Send a notification to all devices registered for a specific user."""
     from supabase import create_client
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
-    result = supabase.table("devices").select("fcm_token").execute()
+    result   = (
+        supabase.table("devices")
+        .select("fcm_token")
+        .eq("user_email", user_email)
+        .execute()
+    )
     tokens = [r["fcm_token"] for r in (result.data or [])]
+    for token in tokens:
+        send_reminder(token, title, body, item_id)
+
+
+def send_to_all_devices(title: str, body: str, item_id: str):
+    """Send a notification to every registered device (fallback / broadcast)."""
+    from supabase import create_client
+    supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
+    result   = supabase.table("devices").select("fcm_token").execute()
+    tokens   = [r["fcm_token"] for r in (result.data or [])]
     for token in tokens:
         send_reminder(token, title, body, item_id)

@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:http/http.dart' as http;
 import 'api_service.dart';
 
 @pragma('vm:entry-point')
@@ -65,12 +63,16 @@ class NotificationService {
 
   static Future<void> _registerToken(String token) async {
     try {
-      final base = await ApiService.getBaseUrl();
-      await http.post(
-        Uri.parse('$base/register-device'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'fcm_token': token}),
-      ).timeout(const Duration(seconds: 10));
+      await ApiService.registerDevice(token);
+    } catch (_) {}
+  }
+
+  /// Call this after Google sign-in to re-register the current token with
+  /// the user's email attached, so reminders go to the right device.
+  static Future<void> reRegister() async {
+    try {
+      final token = await _messaging.getToken();
+      if (token != null) await _registerToken(token);
     } catch (_) {}
   }
 }

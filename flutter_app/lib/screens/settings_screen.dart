@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 
 final _googleSignIn = GoogleSignIn(
   scopes: [
@@ -89,6 +90,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         email: account.email,
       );
 
+      // Re-register FCM token now that we have user_email
+      await NotificationService.reRegister();
+
       if (mounted) {
         setState(() {
           _googleConnected = status.connected;
@@ -130,6 +134,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await ApiService.disconnectGoogle();
       await _googleSignIn.signOut();
+      // Re-register FCM token without user_email
+      await NotificationService.reRegister();
       if (mounted) {
         setState(() {
           _googleConnected = false;

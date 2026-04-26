@@ -24,6 +24,7 @@ class IngestRequest(BaseModel):
 class MessageRequest(BaseModel):
     message: str
     history: list[dict] = []
+    user_email: Optional[str] = None   # identifies which user sent this
 
 
 class IngestResponse(BaseModel):
@@ -44,12 +45,17 @@ class StatusResponse(BaseModel):
 
 class UpdateItemRequest(BaseModel):
     user_note: Optional[str] = None
-    remind_at: Optional[str] = None  # ISO datetime string
+    remind_at: Optional[str] = None
 
 
 class GoogleAuthRequest(BaseModel):
     server_auth_code: str
-    email: Optional[str] = None
+    email: str   # required — we need email to key the token row
+
+
+class DeviceRequest(BaseModel):
+    fcm_token: str
+    user_email: Optional[str] = None
 
 
 REMINDER_RE = re.compile(
@@ -57,8 +63,7 @@ REMINDER_RE = re.compile(
 )
 
 
-def _note_from_text(text: str, summary: str) -> str | None:
-    """Extract a user note from message text alongside a URL."""
+def _note_from_text(text: str) -> str | None:
     text = text.strip()
     if not text or len(text) < 5:
         return None
@@ -98,7 +103,7 @@ async def message(req: MessageRequest):
     if urls:
         url = urls[0]
         surrounding_text = URL_RE.sub("", text).strip()
-        note = _note_from_text(surrounding_text, "")
+        note = _note_from_text(surrounding_text)
 
         try:
             result = ingest_url(url)
@@ -111,32 +116,38 @@ async def message(req: MessageRequest):
             f"**Intent:** {result['intent']}  |  **Tags:** {', '.join(result['tags'])}"
         ]
 
-        remind_at = None
         if note:
             remind_at = parse_reminder(note)
             clean_note = strip_reminder(note) if remind_at else note
 
             if remind_at:
                 supabase = _get_supabase()
-                item_id = result["stored"].get("id")
-                if item_id:
-                    supabase.table("items").update({
-                        "remind_at": remind_at.isoformat(),
-                        "user_note": clean_note or None,
-                        "reminder_sent": False,
-                    }).eq("id", item_id).execute()
+                item_id  = result["stored"].get("id")
 
-                    # Create Google Calendar event (non-fatal if Google not connected)
-                    try:
-                        from services.google_calendar_service import create_calendar_event
-                        item_title = result["stored"].get("title") or url
-                        cal_event_id = create_calendar_event(remind_at, item_title, clean_note or "")
-                        if cal_event_id:
-                            supabase.table("items").update(
-                                {"calendar_event_id": cal_event_id}
-                            ).eq("id", item_id).execute()
-                    except Exception as cal_err:
-                        logger.warning("Calendar event creation skipped: %s", cal_err)
+                if item_id:
+                    # Store reminder in user_reminders table (per-user)
+                    reminder_row = {
+                        "item_id":      item_id,
+                        "user_email":   req.user_email or "unknown",
+                        "remind_at":    remind_at.isoformat(),
+                        "user_note":    clean_note or None,
+                        "reminder_sent": False,
+                    }
+
+                    # Create Google Calendar event if user has connected Google
+                    if req.user_email:
+                        try:
+                            from services.google_calendar_service import create_calendar_event
+                            item_title  = result["stored"].get("title") or url
+                            cal_event_id = create_calendar_event(
+                                req.user_email, remind_at, item_title, clean_note or ""
+                            )
+                            if cal_event_id:
+                                reminder_row["calendar_event_id"] = cal_event_id
+                        except Exception as cal_err:
+                            logger.warning("Calendar event creation skipped: %s", cal_err)
+
+                    supabase.table("user_reminders").insert(reminder_row).execute()
 
                 local_str = remind_at.strftime("%A, %b %d at %I:%M %p UTC")
                 response_parts.append(
@@ -146,11 +157,16 @@ async def message(req: MessageRequest):
             elif clean_note:
                 response_parts.append(f"\n\n📝 **Note:** \"{clean_note}\"")
 
-        return {"response": "".join(response_parts), "mode": "ingest", "intent": result["intent"], "tags": result["tags"]}
+        return {
+            "response": "".join(response_parts),
+            "mode":     "ingest",
+            "intent":   result["intent"],
+            "tags":     result["tags"],
+        }
 
-    # Pure text query — pass conversation history for context
+    # Pure text query
     try:
-        mode = detect_mode(text)
+        mode     = detect_mode(text)
         response = rag_query(text, history=req.history)
         return {"response": response, "mode": mode}
     except Exception as e:
@@ -162,7 +178,7 @@ async def message(req: MessageRequest):
 async def query(req: MessageRequest):
     from retrieval.chain import detect_mode
     try:
-        mode = detect_mode(req.message)
+        mode     = detect_mode(req.message)
         response = rag_query(req.message, history=req.history)
         return QueryResponse(response=response, mode=mode)
     except Exception as e:
@@ -170,16 +186,19 @@ async def query(req: MessageRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class DeviceRequest(BaseModel):
-    fcm_token: str
-
+# ── Device registration ──────────────────────────────────────────────────────
 
 @router.post("/register-device")
 async def register_device(req: DeviceRequest):
     supabase = _get_supabase()
-    supabase.table("devices").upsert({"fcm_token": req.fcm_token}, on_conflict="fcm_token").execute()
+    row = {"fcm_token": req.fcm_token}
+    if req.user_email:
+        row["user_email"] = req.user_email
+    supabase.table("devices").upsert(row, on_conflict="fcm_token").execute()
     return {"status": "registered"}
 
+
+# ── Digest ───────────────────────────────────────────────────────────────────
 
 @router.get("/digest")
 async def digest():
@@ -191,14 +210,16 @@ async def digest():
     return {"available": True, **data}
 
 
+# ── Status ───────────────────────────────────────────────────────────────────
+
 @router.get("/status", response_model=StatusResponse)
 async def status():
     supabase = _get_supabase()
-    result = supabase.table("items").select("intent").execute()
-    items = result.data or []
+    result   = supabase.table("items").select("intent").execute()
+    items    = result.data or []
     counts: dict[str, int] = {}
     for item in items:
-        intent = item.get("intent", "unknown")
+        intent         = item.get("intent", "unknown")
         counts[intent] = counts.get(intent, 0) + 1
     return StatusResponse(total=len(items), by_intent=counts)
 
@@ -207,27 +228,27 @@ async def status():
 
 @router.get("/items")
 async def list_items(
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    limit:  int           = Query(default=20, ge=1, le=100),
+    offset: int           = Query(default=0,  ge=0),
     intent: Optional[str] = None,
 ):
     supabase = _get_supabase()
     q = supabase.table("items").select(
-        "id, url, title, summary, intent, tags, source, created_at, remind_at, user_note, reminder_sent"
+        "id, url, title, summary, intent, tags, source, created_at"
     )
     if intent:
         q = q.eq("intent", intent)
     result = q.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
-    items = result.data or []
+    items  = result.data or []
     return {"items": items, "offset": offset, "limit": limit, "count": len(items)}
 
 
 @router.get("/items/{item_id}")
 async def get_item(item_id: str):
     supabase = _get_supabase()
-    result = (
+    result   = (
         supabase.table("items")
-        .select("id, url, title, summary, intent, tags, source, created_at, remind_at, user_note, reminder_sent")
+        .select("id, url, title, summary, intent, tags, source, created_at")
         .eq("id", item_id)
         .limit(1)
         .execute()
@@ -243,13 +264,13 @@ async def update_item(item_id: str, req: UpdateItemRequest):
     if req.user_note is not None:
         updates["user_note"] = req.user_note
     if req.remind_at is not None:
-        updates["remind_at"] = req.remind_at
-        updates["reminder_sent"] = False  # reset so it fires again
+        updates["remind_at"]      = req.remind_at
+        updates["reminder_sent"]  = False
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
     supabase = _get_supabase()
-    result = supabase.table("items").update(updates).eq("id", item_id).execute()
+    result   = supabase.table("items").update(updates).eq("id", item_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Item not found")
     return result.data[0]
@@ -258,16 +279,44 @@ async def update_item(item_id: str, req: UpdateItemRequest):
 # ── Reminders endpoint ───────────────────────────────────────────────────────
 
 @router.get("/reminders")
-async def reminders():
+async def reminders(user_email: Optional[str] = Query(default=None)):
     supabase = _get_supabase()
+
+    if not user_email:
+        return {"reminders": []}
+
+    # Fetch user_reminders joined with item data
     result = (
-        supabase.table("items")
-        .select("id, url, title, summary, intent, tags, remind_at, user_note, reminder_sent, created_at")
-        .not_.is_("remind_at", "null")
+        supabase.table("user_reminders")
+        .select(
+            "id, remind_at, user_note, reminder_sent, calendar_event_id, "
+            "items(id, url, title, summary, intent, tags, source, created_at)"
+        )
+        .eq("user_email", user_email)
         .order("remind_at", desc=False)
         .execute()
     )
-    return {"reminders": result.data or []}
+
+    # Flatten to match the SavedItem shape the Flutter app expects
+    reminders_list = []
+    for r in (result.data or []):
+        item = r.get("items") or {}
+        reminders_list.append({
+            "id":             item.get("id") or r["id"],
+            "reminder_id":    r["id"],
+            "url":            item.get("url", ""),
+            "title":          item.get("title"),
+            "summary":        item.get("summary"),
+            "intent":         item.get("intent", "reference"),
+            "tags":           item.get("tags", []),
+            "source":         item.get("source"),
+            "created_at":     item.get("created_at", ""),
+            "remind_at":      r["remind_at"],
+            "user_note":      r["user_note"],
+            "reminder_sent":  r["reminder_sent"],
+        })
+
+    return {"reminders": reminders_list}
 
 
 # ── Google Calendar auth endpoints ──────────────────────────────────────────
@@ -283,13 +332,16 @@ async def connect_google(req: GoogleAuthRequest):
 
 
 @router.get("/auth/google/status")
-async def google_auth_status():
+async def google_auth_status(user_email: Optional[str] = Query(default=None)):
     from services.google_calendar_service import get_status
-    return get_status()
+    if not user_email:
+        return {"connected": False, "email": None}
+    return get_status(user_email)
 
 
 @router.delete("/auth/google")
-async def disconnect_google():
+async def disconnect_google(user_email: Optional[str] = Query(default=None)):
     from services.google_calendar_service import disconnect
-    disconnect()
+    if user_email:
+        disconnect(user_email)
     return {"status": "disconnected"}

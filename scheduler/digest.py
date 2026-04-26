@@ -79,29 +79,49 @@ def clear_pending_digest():
 
 
 def check_reminders():
-    """Fire push notifications for any due reminders."""
+    """Fire push notifications for any due reminders (per-user)."""
     try:
-        from notifications.fcm import send_to_all_devices
+        from notifications.fcm import send_to_user_devices, send_to_all_devices
         supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
         now = datetime.now(timezone.utc).isoformat()
+
+        # Query user_reminders joined with item data
         result = (
-            supabase.table("items")
-            .select("id, title, url, summary, user_note")
+            supabase.table("user_reminders")
+            .select("id, user_email, user_note, items(id, title, url, summary)")
             .lte("remind_at", now)
             .eq("reminder_sent", False)
             .execute()
         )
-        items = result.data or []
-        for item in items:
-            title = item.get("title") or item.get("url", "Saved content")
-            note = item.get("user_note") or item.get("summary") or "Time to revisit this."
-            send_to_all_devices(
-                title=f"📌 Reminder: {title[:60]}",
-                body=note[:120],
-                item_id=item["id"],
-            )
-            supabase.table("items").update({"reminder_sent": True}).eq("id", item["id"]).execute()
-            logger.info(f"Reminder sent for item {item['id']}")
+        due = result.data or []
+
+        for r in due:
+            item       = r.get("items") or {}
+            user_email = r.get("user_email", "unknown")
+            title      = item.get("title") or item.get("url", "Saved content")
+            note       = r.get("user_note") or item.get("summary") or "Time to revisit this."
+            item_id    = item.get("id") or r["id"]
+
+            if user_email and user_email != "unknown":
+                send_to_user_devices(
+                    user_email=user_email,
+                    title=f"📌 Reminder: {title[:60]}",
+                    body=note[:120],
+                    item_id=item_id,
+                )
+            else:
+                # Fallback: notify all devices (pre-multi-user reminders)
+                send_to_all_devices(
+                    title=f"📌 Reminder: {title[:60]}",
+                    body=note[:120],
+                    item_id=item_id,
+                )
+
+            supabase.table("user_reminders").update(
+                {"reminder_sent": True}
+            ).eq("id", r["id"]).execute()
+            logger.info("Reminder sent for user_reminders.id=%s user=%s", r["id"], user_email)
+
     except Exception as e:
         logger.error(f"Reminder check failed: {e}")
 
