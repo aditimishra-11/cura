@@ -1,9 +1,13 @@
+import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../config.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+
+// ignore: avoid_print
+void logger(String msg) => developer.log(msg, name: 'SignIn');
 
 const _bg      = Color(0xFF0F0E17);
 const _surface = Color(0xFF1E1D2C);
@@ -45,14 +49,19 @@ class _SignInScreenState extends State<SignInScreen> {
       final serverAuthCode = account.serverAuthCode;
 
       if (serverAuthCode != null) {
-        // Exchange code with backend — this also saves email + calendar tokens
-        await ApiService.connectGoogle(
-          serverAuthCode: serverAuthCode,
-          email: account.email,
-        );
+        try {
+          // Exchange code with backend — stores calendar tokens + saves email
+          await ApiService.connectGoogle(
+            serverAuthCode: serverAuthCode,
+            email: account.email,
+          );
+        } catch (calErr) {
+          // Calendar token exchange failed (e.g. no refresh_token, bad request)
+          // Still allow sign-in — just save the email so the app works
+          logger('Calendar token exchange failed: $calErr');
+          await ApiService.setUserEmail(account.email);
+        }
       } else {
-        // No server auth code (shouldn't happen if Web Client ID is set), but
-        // still save the email so per-user features work
         await ApiService.setUserEmail(account.email);
       }
 
@@ -62,8 +71,8 @@ class _SignInScreenState extends State<SignInScreen> {
       widget.onSignedIn();
     } catch (e) {
       setState(() {
-        _loading  = false;
-        _error    = e.toString().replaceFirst('Exception: ', '');
+        _loading = false;
+        _error   = e.toString().replaceFirst('Exception: ', '');
       });
     }
   }

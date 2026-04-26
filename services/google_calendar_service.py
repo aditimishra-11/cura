@@ -47,19 +47,21 @@ def exchange_code(server_auth_code: str) -> dict:
 
 
 def _store_tokens(token_data: dict, email: str):
-    expiry = None
+    row: dict = {
+        "email":        email,
+        "access_token": token_data.get("access_token"),
+        "updated_at":   datetime.now(timezone.utc).isoformat(),
+    }
     if "expires_in" in token_data:
-        expiry = (
+        row["token_expiry"] = (
             datetime.now(timezone.utc) + timedelta(seconds=int(token_data["expires_in"]))
         ).isoformat()
+    # Only store refresh_token when Google actually sends one (first auth or forced consent).
+    # On subsequent sign-ins Google omits it — don't overwrite the existing token.
+    if token_data.get("refresh_token"):
+        row["refresh_token"] = token_data["refresh_token"]
 
-    _supabase().table("google_tokens").upsert({
-        "email":         email,
-        "access_token":  token_data.get("access_token"),
-        "refresh_token": token_data.get("refresh_token"),
-        "token_expiry":  expiry,
-        "updated_at":    datetime.now(timezone.utc).isoformat(),
-    }, on_conflict="email").execute()
+    _supabase().table("google_tokens").upsert(row, on_conflict="email").execute()
 
 
 def _load_tokens(email: str) -> dict | None:
