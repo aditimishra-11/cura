@@ -337,6 +337,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   controller: _controller,
                   textInputAction: TextInputAction.newline,
                   keyboardType: TextInputType.multiline,
+                  textCapitalization: TextCapitalization.sentences,
                   maxLines: null,
                   minLines: 1,
                   style: GoogleFonts.inter(fontSize: 12.5, color: _text2),

@@ -594,7 +594,8 @@ class _ItemDetailSheet extends StatelessWidget {
   }
 
   Future<void> _openUrl() async {
-    final uri = Uri.tryParse(item.url);
+    final cleaned = item.url.trim().replaceAll(RegExp(r'[.,;:!?\)\]"]+$'), '');
+    final uri = Uri.tryParse(cleaned);
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 

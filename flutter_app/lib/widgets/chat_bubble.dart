@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum BubbleType { user, assistant, system }
 
@@ -136,6 +137,14 @@ class ChatBubble extends StatelessWidget {
                           )
                         : MarkdownBody(
                             data: text,
+                            onTapLink: (text, href, title) async {
+                              if (href != null) {
+                                final uri = Uri.tryParse(href);
+                                if (uri != null) {
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                }
+                              }
+                            },
                             styleSheet: MarkdownStyleSheet(
                               p: GoogleFonts.inter(
                                 fontSize: 12.5,

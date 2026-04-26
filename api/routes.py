@@ -104,7 +104,7 @@ async def message(req: MessageRequest):
     urls = URL_RE.findall(text)
 
     if urls:
-        url = urls[0]
+        url = urls[0].rstrip('.,;:!?)>]\"\' ')
         surrounding_text = URL_RE.sub("", text).strip()
         note = _note_from_text(surrounding_text)
 
