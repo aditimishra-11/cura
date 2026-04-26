@@ -63,6 +63,11 @@ flutter {
     source = "../.."
 }
 
+configurations.all {
+    resolutionStrategy.force 'androidx.window:window:1.0.0'
+    resolutionStrategy.force 'androidx.window:window-java:1.0.0'
+}
+
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
 }
