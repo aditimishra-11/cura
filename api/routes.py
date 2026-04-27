@@ -19,6 +19,16 @@ router = APIRouter()
 
 URL_RE = re.compile(r"https?://\S+")
 
+# Bare domain: skills.sh, getdesign.md, example.io/path etc.
+BARE_DOMAIN_RE = re.compile(
+    r'(?<![/\w])'
+    r'((?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)'
+    r'+(?:com|org|net|io|sh|md|ai|co|dev|app|xyz|gov|edu|tv|me|gg|tech|design|tools|so|cc|uk|us|in))'
+    r'(?:/\S*)?'
+    r'(?!\w)',
+    re.IGNORECASE,
+)
+
 
 class IngestRequest(BaseModel):
     url: str
@@ -82,6 +92,25 @@ def _get_supabase():
     return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_KEY"])
 
 
+def _save_text_item(subject: str, original_text: str) -> dict:
+    """Store a text-only reminder (no URL) using a Google search URL as the key."""
+    from urllib.parse import quote
+    supabase = _get_supabase()
+    search_url = f"https://www.google.com/search?q={quote(subject or original_text)}"
+    row = {
+        "url":     search_url,
+        "title":   (subject or original_text)[:200],
+        "summary": original_text,
+        "intent":  "reference",
+        "tags":    [],
+        "source":  "text",
+    }
+    result = supabase.table("items").upsert(row, on_conflict="url").execute()
+    stored = result.data[0] if result.data else row
+    return {"stored": stored, "summary": row["summary"],
+            "intent": "reference", "tags": []}
+
+
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest(req: IngestRequest):
     try:
@@ -98,15 +127,26 @@ async def ingest(req: IngestRequest):
 
 @router.post("/message")
 async def message(req: MessageRequest):
-    """Unified endpoint: handles URL, query, or mixed URL+text messages."""
+    """Unified endpoint: handles URL, bare domain, query, or mixed messages."""
     from retrieval.chain import detect_mode
     text = req.message.strip()
-    urls = URL_RE.findall(text)
 
-    if urls:
-        url = urls[0]
-        surrounding_text = URL_RE.sub("", text).strip()
-        note = _note_from_text(surrounding_text)
+    # ── Detect URL: explicit https:// first, then bare domain fallback ─────────
+    explicit_urls = URL_RE.findall(text)
+    if explicit_urls:
+        url             = explicit_urls[0]
+        surrounding_text = URL_RE.sub("", text, count=1).strip()
+    else:
+        bare = BARE_DOMAIN_RE.search(text)
+        if bare:
+            url              = "https://" + bare.group(0)
+            surrounding_text = BARE_DOMAIN_RE.sub("", text, count=1).strip()
+        else:
+            url              = None
+            surrounding_text = None
+
+    if url:
+        note = _note_from_text(surrounding_text) if surrounding_text else None
 
         try:
             result = ingest_url(url)
@@ -179,7 +219,50 @@ async def message(req: MessageRequest):
             "tags":     result["tags"],
         }
 
-    # Pure text query
+    # ── Text-only reminder (no URL, no domain) ────────────────────────────────
+    remind_at = parse_reminder(text)
+    if remind_at:
+        clean_note = strip_reminder(text)
+        subject    = clean_note if clean_note else text
+
+        result   = _save_text_item(subject, text)
+        item_id  = result["stored"].get("id")
+        supabase = _get_supabase()
+
+        reminder_row = {
+            "item_id":       item_id,
+            "user_email":    req.user_email or "unknown",
+            "remind_at":     remind_at.isoformat(),
+            "user_note":     subject or None,
+            "reminder_sent": False,
+        }
+
+        if req.user_email and item_id:
+            try:
+                from services.google_calendar_service import create_calendar_event
+                cal_event_id = create_calendar_event(
+                    req.user_email, remind_at, subject,
+                    f"📝 {text}"
+                )
+                if cal_event_id:
+                    reminder_row["calendar_event_id"] = cal_event_id
+            except Exception as cal_err:
+                logger.warning("Calendar event creation skipped: %s", cal_err)
+
+        supabase.table("user_reminders").insert(reminder_row).execute()
+
+        ist_time  = remind_at.astimezone(IST)
+        local_str = ist_time.strftime("%A, %b %d at %I:%M %p IST")
+        return {
+            "response": (
+                f"✅ **Got it!**\n\n📝 **Note:** \"{subject}\"\n\n"
+                f"⏰ **Reminder set for {local_str}**\n"
+                f"I'll send a push notification when it's time."
+            ),
+            "mode": "ingest",
+        }
+
+    # ── Pure text query ────────────────────────────────────────────────────────
     try:
         mode     = detect_mode(text)
         response = rag_query(text, history=req.history)

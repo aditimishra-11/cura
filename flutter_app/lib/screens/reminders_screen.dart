@@ -330,26 +330,33 @@ class _ReminderCard extends StatelessWidget {
     try {
       final dt  = DateTime.parse(iso).toLocal();
       final now = DateTime.now();
-      final diff = dt.difference(now);
 
       if (group == _ReminderGroup.sent) return "Reminder sent";
 
+      final diff = dt.difference(now);
       if (diff.inSeconds < 0) {
         final past = now.difference(dt);
         if (past.inMinutes < 60) return "${past.inMinutes}m overdue";
         if (past.inHours < 24)   return "${past.inHours}h overdue";
         return "${past.inDays}d overdue";
       }
+
       if (diff.inMinutes < 60) return "in ${diff.inMinutes}m";
-      if (diff.inHours < 24)   return "Today · ${_hm(dt)}";
-      if (diff.inDays == 1)    return "Tomorrow · ${_hm(dt)}";
-      if (diff.inDays < 7) {
+
+      // Calendar-day comparison (avoids "Today" when reminder is actually tomorrow)
+      final today = DateTime(now.year, now.month, now.day);
+      final dtDay = DateTime(dt.year, dt.month, dt.day);
+      final daysDiff = dtDay.difference(today).inDays;
+
+      if (daysDiff == 0) return "Today · ${_hm(dt)}";
+      if (daysDiff == 1) return "Tomorrow · ${_hm(dt)}";
+      if (daysDiff < 7) {
         const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-        return "${days[dt.weekday - 1]}, ${_shortDate(dt)}";
+        return "${days[dt.weekday - 1]}, ${_hm(dt)}";
       }
       return _shortDate(dt);
     } catch (_) {
-      return iso;
+      return iso ?? '';
     }
   }
 

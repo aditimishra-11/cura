@@ -22,10 +22,35 @@ that may contain a reminder request (e.g. "remind me in 2 mins", "ping me tomorr
 at 9am", "follow up next Monday", "don't let me forget this on Friday").
 
 Current UTC time: {now}
+User's timezone: IST (India Standard Time, UTC+5:30).
+
+IMPORTANT: Any time the user mentions without an explicit timezone should be \
+treated as IST. Convert to UTC before outputting.
+
+Datetime pattern guide (resolve relative to current IST time = UTC+5:30):
+- "in X mins / hours / days"      → add X to now
+- "tomorrow at 9am"               → next calendar day 09:00 IST
+- "tomorrow morning"              → next calendar day 09:00 IST
+- "tomorrow afternoon"            → next calendar day 14:00 IST
+- "tomorrow evening"              → next calendar day 18:00 IST
+- "tonight"                       → today 21:00 IST
+- "this friday / saturday / ..."  → the coming occurrence of that weekday 09:00 IST \
+(if today is that day, use next week)
+- "next friday / monday / ..."    → the occurrence in the NEXT calendar week 09:00 IST
+- "next week"                     → Monday of next calendar week 09:00 IST
+- "next week wednesday"           → Wednesday of next calendar week 09:00 IST
+- "this weekend"                  → coming Saturday 10:00 IST
+- "end of day" / "EOD"            → today 18:00 IST
+- "morning" (no day given)        → next upcoming 09:00 IST
+- "afternoon" (no day given)      → next upcoming 14:00 IST
+- "evening" (no day given)        → next upcoming 18:00 IST
+- "night" (no day given)          → next upcoming 21:00 IST
+- explicit time like "5:30 AM"    → treat as IST, convert to UTC
 
 Rules:
 - If the text contains a reminder/follow-up request, output ONLY the target \
-datetime in ISO 8601 format with UTC offset, e.g. 2025-06-01T09:00:00+00:00
+datetime in ISO 8601 format with UTC offset (always UTC), \
+e.g. 2025-06-01T03:30:00+00:00
 - If there is NO reminder intent, output ONLY the word: none
 - Do not output anything else — no explanation, no punctuation, just the datetime \
 or the word none.

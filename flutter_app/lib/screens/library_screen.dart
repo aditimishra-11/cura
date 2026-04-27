@@ -593,9 +593,24 @@ class _ItemDetailSheet extends StatelessWidget {
     return colors[_domain.hashCode.abs() % colors.length];
   }
 
+  bool get _isSearchItem =>
+      item.url.startsWith('https://www.google.com/search');
+
   Future<void> _openUrl() async {
     final uri = Uri.tryParse(item.url);
     if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _searchGoogle() async {
+    final q   = Uri.encodeComponent(item.displayTitle);
+    final uri = Uri.parse('https://www.google.com/search?q=$q');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _searchYouTube() async {
+    final q   = Uri.encodeComponent(item.displayTitle);
+    final uri = Uri.parse('https://www.youtube.com/results?search_query=$q');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   String _formatRemindAt(String iso) {
@@ -852,40 +867,97 @@ class _ItemDetailSheet extends StatelessWidget {
               // Action buttons
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _accent,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.chat_bubble_outline_rounded,
-                                  size: 14, color: Colors.white),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Ask Cura",
-                                style: GoogleFonts.inter(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white),
-                              ),
-                            ],
-                          ),
+                    // Ask Cura (always shown)
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _accent,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.chat_bubble_outline_rounded,
+                                size: 14, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              "Ask Cura",
+                              style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: GestureDetector(
+                    const SizedBox(height: 9),
+                    // Open URL (for real URLs) or Google + YouTube (for text/search items)
+                    if (_isSearchItem) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _searchGoogle,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _surface4,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.search, size: 14, color: _text1),
+                                    const SizedBox(width: 6),
+                                    Text("Google",
+                                        style: GoogleFonts.inter(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: _text1)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _searchYouTube,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: _surface4,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.play_circle_outline,
+                                        size: 14, color: _text1),
+                                    const SizedBox(width: 6),
+                                    Text("YouTube",
+                                        style: GoogleFonts.inter(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: _text1)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      GestureDetector(
                         onTap: _openUrl,
                         child: Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
                             color: _surface4,
@@ -894,21 +966,18 @@ class _ItemDetailSheet extends StatelessWidget {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.open_in_new,
-                                  size: 14, color: _text1),
+                              const Icon(Icons.open_in_new, size: 14, color: _text1),
                               const SizedBox(width: 6),
-                              Text(
-                                "Open URL",
-                                style: GoogleFonts.inter(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: _text1),
-                              ),
+                              Text("Open URL",
+                                  style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: _text1)),
                             ],
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
