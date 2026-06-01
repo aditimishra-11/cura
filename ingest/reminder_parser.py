@@ -62,13 +62,57 @@ or the word none.
 """
 
 
+import re
+
+# Patterns handled directly in Python — no LLM arithmetic needed
+_RELATIVE_RE = re.compile(
+    r'\bin\s+(\d+)\s*(min(?:ute)?s?|hr?s?|hours?|days?)\b',
+    re.IGNORECASE,
+)
+_NO_REMINDER_RE = re.compile(
+    r'\b(remind|reminder|ping|follow.?up|don.?t let me forget|note to self|revisit|check|read this)\b',
+    re.IGNORECASE,
+)
+
+
+def _parse_relative(text: str, now: datetime) -> datetime | None:
+    """
+    Handle "in X mins/hours/days" purely in Python.
+    Returns UTC datetime or None if pattern not found.
+    """
+    m = _RELATIVE_RE.search(text)
+    if not m:
+        return None
+    n    = int(m.group(1))
+    unit = m.group(2).lower()
+    if unit.startswith('m'):
+        return now + timedelta(minutes=n)
+    if unit.startswith('h'):
+        return now + timedelta(hours=n)
+    if unit.startswith('d'):
+        return now + timedelta(days=n)
+    return None
+
+
 def parse_reminder(text: str) -> datetime | None:
     """Return a UTC datetime if the text contains a reminder expression, else None."""
     from services.langfuse_compat import OpenAI
 
     now_utc = datetime.now(timezone.utc)
+
+    # ── Fast path: relative durations handled in Python (no LLM) ─────────────
+    relative = _parse_relative(text, now_utc)
+    if relative is not None:
+        logger.debug("Relative reminder parsed in Python: %s", relative)
+        return relative
+
+    # ── If no reminder intent at all, skip LLM call entirely ─────────────────
+    if not _NO_REMINDER_RE.search(text):
+        return None
+
+    # ── LLM path: complex expressions (tomorrow, next friday, tonight…) ───────
     now_ist = now_utc.astimezone(IST)
-    client = OpenAI()
+    client  = OpenAI()
 
     try:
         resp = client.chat.completions.create(
@@ -92,9 +136,7 @@ def parse_reminder(text: str) -> datetime | None:
         if raw.lower() == "none" or not raw:
             return None
 
-        # Parse the ISO datetime returned by the LLM
         dt = datetime.fromisoformat(raw)
-        # Ensure UTC
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         else:
