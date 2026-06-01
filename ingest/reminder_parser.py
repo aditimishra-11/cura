@@ -12,25 +12,28 @@ The LLM is given the current UTC time and asked to return an ISO 8601 datetime
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 _SYSTEM = """\
 You are a reminder-time extractor. The user will give you a short piece of text \
 that may contain a reminder request (e.g. "remind me in 2 mins", "ping me tomorrow \
 at 9am", "follow up next Monday", "don't let me forget this on Friday").
 
-Current UTC time: {now}
-User's timezone: IST (India Standard Time, UTC+5:30).
+Current time:
+  UTC: {now_utc}
+  IST: {now_ist}  ← use this as "now" for all relative calculations
 
 IMPORTANT: Any time the user mentions without an explicit timezone should be \
 treated as IST. Convert to UTC before outputting.
 
-Datetime pattern guide (resolve relative to current IST time = UTC+5:30):
-- "in X mins" / "in X minutes"    → add exactly X minutes to current UTC time, then output as UTC
-- "in X hours"                    → add exactly X hours to current UTC time, then output as UTC
-- "in X days"                     → add exactly X days to current UTC time, then output as UTC
+Datetime pattern guide (resolve relative to current IST time shown above):
+- "in X mins" / "in X minutes"    → add X minutes to current IST time, convert result to UTC
+- "in X hours"                    → add X hours to current IST time, convert result to UTC
+- "in X days"                     → add X days to current IST time, convert result to UTC
 - "tomorrow at 9am"               → next calendar day 09:00 IST
 - "tomorrow morning"              → next calendar day 09:00 IST
 - "tomorrow afternoon"            → next calendar day 14:00 IST
@@ -63,7 +66,8 @@ def parse_reminder(text: str) -> datetime | None:
     """Return a UTC datetime if the text contains a reminder expression, else None."""
     from services.langfuse_compat import OpenAI
 
-    now = datetime.now(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    now_ist = now_utc.astimezone(IST)
     client = OpenAI()
 
     try:
@@ -72,7 +76,10 @@ def parse_reminder(text: str) -> datetime | None:
             messages=[
                 {
                     "role": "system",
-                    "content": _SYSTEM.format(now=now.strftime("%Y-%m-%dT%H:%M:%SZ")),
+                    "content": _SYSTEM.format(
+                        now_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%S UTC"),
+                        now_ist=now_ist.strftime("%Y-%m-%dT%H:%M:%S IST"),
+                    ),
                 },
                 {"role": "user", "content": text},
             ],
