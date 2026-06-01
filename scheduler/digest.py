@@ -130,6 +130,14 @@ def start_background_digest() -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     scheduler.add_job(generate_digest, "cron", day_of_week="sun", hour=9, minute=0, id="weekly_digest")
     scheduler.add_job(check_reminders, "interval", minutes=15, id="reminder_check")
+
+    # AI news pipeline — runs daily at 7 AM IST (01:30 UTC)
+    # Note: on Render free tier this may not fire reliably due to spin-down.
+    # The external cron hitting /fetch-news is the primary trigger;
+    # this job is a fallback for always-on deployments.
+    from scheduler.news_fetcher import run_news_pipeline
+    scheduler.add_job(run_news_pipeline, "cron", hour=1, minute=30, id="daily_news")
+
     scheduler.start()
-    logger.info("Schedulers started: weekly digest (Sun 9am) + reminder check (every 15min).")
+    logger.info("Schedulers started: weekly digest (Sun 9am) + reminder check (every 15min) + news pipeline (daily 7am IST).")
     return scheduler

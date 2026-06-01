@@ -417,6 +417,24 @@ async def reminders(user_email: Optional[str] = Query(default=None)):
     return {"reminders": reminders_list}
 
 
+# ── AI News pipeline trigger (called by external cron at 7 AM IST daily) ────
+
+@router.get("/fetch-news")
+async def trigger_news_pipeline():
+    """
+    Triggered by external cron once daily at 7 AM IST.
+    Fetches AI news, filters for relevance, ingests into Cura library,
+    and sends a digest push notification.
+    """
+    try:
+        from scheduler.news_fetcher import run_news_pipeline
+        result = run_news_pipeline()
+        return result
+    except Exception as e:
+        logger.error("News pipeline failed: %s", e)
+        return {"status": "error", "detail": str(e)}
+
+
 # ── Manual reminder trigger (called by external cron every 2 min) ───────────
 
 @router.get("/check-reminders")
