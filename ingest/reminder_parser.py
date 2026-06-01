@@ -23,17 +23,14 @@ You are a reminder-time extractor. The user will give you a short piece of text 
 that may contain a reminder request (e.g. "remind me in 2 mins", "ping me tomorrow \
 at 9am", "follow up next Monday", "don't let me forget this on Friday").
 
-Current time:
-  UTC: {now_utc}
-  IST: {now_ist}  ← use this as "now" for all relative calculations
+Current IST date and time: {now_ist}
+(IST = India Standard Time = UTC+5:30)
 
-IMPORTANT: Any time the user mentions without an explicit timezone should be \
-treated as IST. Convert to UTC before outputting.
+All times the user mentions are in IST unless explicitly stated otherwise.
+Output the reminder datetime in UTC (ISO 8601 with +00:00 offset).
+To convert IST to UTC: subtract 5 hours 30 minutes.
 
-Datetime pattern guide (resolve relative to current IST time shown above):
-- "in X mins" / "in X minutes"    → add X minutes to current IST time, convert result to UTC
-- "in X hours"                    → add X hours to current IST time, convert result to UTC
-- "in X days"                     → add X days to current IST time, convert result to UTC
+Datetime pattern guide (all times are IST, resolve relative to current IST time above):
 - "tomorrow at 9am"               → next calendar day 09:00 IST
 - "tomorrow morning"              → next calendar day 09:00 IST
 - "tomorrow afternoon"            → next calendar day 14:00 IST
@@ -121,8 +118,7 @@ def parse_reminder(text: str) -> datetime | None:
                 {
                     "role": "system",
                     "content": _SYSTEM.format(
-                        now_utc=now_utc.strftime("%Y-%m-%dT%H:%M:%S UTC"),
-                        now_ist=now_ist.strftime("%Y-%m-%dT%H:%M:%S IST"),
+                        now_ist=now_ist.strftime("%Y-%m-%dT%H:%M:%S IST (%A, %B %d %Y)"),
                     ),
                 },
                 {"role": "user", "content": text},
