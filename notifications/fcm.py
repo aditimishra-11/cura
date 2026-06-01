@@ -29,13 +29,14 @@ def _get_app():
     return _firebase_app
 
 
-def send_reminder(fcm_token: str, title: str, body: str, item_id: str):
+def send_reminder(fcm_token: str, title: str, body: str, item_id: str | None):
     from firebase_admin import messaging
     _get_app()
 
+    # FCM data values must all be strings — None causes a silent failure
     message = messaging.Message(
         notification=messaging.Notification(title=title, body=body),
-        data={"item_id": item_id, "type": "reminder"},
+        data={"item_id": str(item_id) if item_id else "", "type": "reminder"},
         android=messaging.AndroidConfig(
             priority="high",
             notification=messaging.AndroidNotification(

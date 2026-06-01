@@ -28,7 +28,9 @@ IMPORTANT: Any time the user mentions without an explicit timezone should be \
 treated as IST. Convert to UTC before outputting.
 
 Datetime pattern guide (resolve relative to current IST time = UTC+5:30):
-- "in X mins / hours / days"      → add X to now
+- "in X mins" / "in X minutes"    → add exactly X minutes to current UTC time, then output as UTC
+- "in X hours"                    → add exactly X hours to current UTC time, then output as UTC
+- "in X days"                     → add exactly X days to current UTC time, then output as UTC
 - "tomorrow at 9am"               → next calendar day 09:00 IST
 - "tomorrow morning"              → next calendar day 09:00 IST
 - "tomorrow afternoon"            → next calendar day 14:00 IST
