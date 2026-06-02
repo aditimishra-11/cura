@@ -68,6 +68,16 @@ def generate_digest():
     _pending_digest = [{"message": message, "items": items, "created_at": datetime.now(timezone.utc).isoformat()}]
     logger.info(f"Weekly digest generated with {len(items)} items.")
 
+    # ── Email briefing (independent — failure here doesn't affect push) ────────
+    try:
+        from scheduler.email_templates import weekly_briefing_email
+        from services.email_service import send_email
+        subject, html = weekly_briefing_email(message, items)
+        if subject and html:
+            send_email(subject, html)
+    except Exception as e:
+        logger.error("Weekly briefing email failed: %s", e)
+
 
 def get_pending_digest() -> dict | None:
     return _pending_digest[0] if _pending_digest else None

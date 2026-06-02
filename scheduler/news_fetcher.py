@@ -301,6 +301,16 @@ def send_news_digest(items: list[dict]):
     except Exception as e:
         logger.error("News digest push failed: %s", e)
 
+    # ── Email digest (independent of push — failure here doesn't affect push) ──
+    try:
+        from scheduler.email_templates import news_digest_email
+        from services.email_service import send_email
+        subject, html = news_digest_email(items)
+        if subject and html:
+            send_email(subject, html)
+    except Exception as e:
+        logger.error("News digest email failed: %s", e)
+
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
