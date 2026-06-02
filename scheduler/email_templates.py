@@ -42,8 +42,19 @@ _BASE = """\
         <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
             <td>
-              <span style="background:{surf3};color:{accent};font-size:11px;font-weight:700;
-                           padding:5px 12px;border-radius:20px;letter-spacing:0.5px;">✦ CURA</span>
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    <img src="https://raw.githubusercontent.com/aditimishra-11/cura/main/flutter_app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+                         width="36" height="36"
+                         alt="Cura"
+                         style="display:block;border-radius:10px;" />
+                  </td>
+                  <td style="vertical-align:middle;padding-left:10px;">
+                    <span style="color:{accent};font-size:16px;font-weight:700;letter-spacing:-0.3px;">Cura</span>
+                  </td>
+                </tr>
+              </table>
             </td>
             <td align="right">
               <span style="color:{text3};font-size:12px;">{date_str}</span>
