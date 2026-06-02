@@ -12,3 +12,4 @@ firebase-admin==6.5.0
 langfuse>=2.7.0
 feedparser==6.0.11
 requests==2.32.3
+resend==2.10.0

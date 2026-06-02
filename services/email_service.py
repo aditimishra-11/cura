@@ -1,21 +1,20 @@
 """
-Email service for Cura — sends via Gmail SMTP.
+Email service for Cura — sends via Resend API (HTTP, works on Render free tier).
 
 Required env vars:
-    GMAIL_USER         — sender Gmail address (e.g. cura.assistant@gmail.com)
-    GMAIL_APP_PASSWORD — Gmail app password (not your account password)
-                         Generate at: myaccount.google.com/apppasswords
-    DIGEST_EMAIL_RECIPIENTS — comma-separated list of recipient emails
-                               e.g. "mehmathur@gmail.com,gmataditi2023@gmail.com"
+    RESEND_API_KEY         — API key from resend.com
+    RESEND_FROM            — sender address (must be verified in Resend dashboard)
+                             e.g. "Cura <cura@yourdomain.com>"
+                             For testing without a domain, use Resend's default:
+                             "Cura <onboarding@resend.dev>"
+    DIGEST_EMAIL_RECIPIENTS — comma-separated recipient emails
+                              e.g. "mehmathur@gmail.com,gmataditi2023@gmail.com"
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
 
@@ -27,37 +26,38 @@ def get_recipients() -> list[str]:
 
 def send_email(subject: str, html_body: str, text_body: str = "") -> bool:
     """
-    Send an HTML email to all DIGEST_EMAIL_RECIPIENTS.
+    Send an HTML email to all DIGEST_EMAIL_RECIPIENTS via Resend.
     Returns True if at least one recipient received it successfully.
     """
-    gmail_user     = os.environ.get("GMAIL_USER")
-    gmail_password = os.environ.get("GMAIL_APP_PASSWORD")
-    recipients     = get_recipients()
+    import resend
 
-    if not gmail_user or not gmail_password:
-        logger.warning("Email not configured — set GMAIL_USER and GMAIL_APP_PASSWORD")
+    api_key    = os.environ.get("RESEND_API_KEY")
+    from_addr  = os.environ.get("RESEND_FROM", "Cura <onboarding@resend.dev>")
+    recipients = get_recipients()
+
+    if not api_key:
+        logger.warning("Email not configured — set RESEND_API_KEY")
         return False
 
     if not recipients:
         logger.warning("No recipients — set DIGEST_EMAIL_RECIPIENTS")
         return False
 
+    resend.api_key = api_key
     success = False
+
     for recipient in recipients:
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"]    = f"Cura <{gmail_user}>"
-            msg["To"]      = recipient
-
+            params = {
+                "from":    from_addr,
+                "to":      [recipient],
+                "subject": subject,
+                "html":    html_body,
+            }
             if text_body:
-                msg.attach(MIMEText(text_body, "plain"))
-            msg.attach(MIMEText(html_body, "html"))
+                params["text"] = text_body
 
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(gmail_user, gmail_password)
-                server.sendmail(gmail_user, recipient, msg.as_string())
-
+            resend.Emails.send(params)
             logger.info("Email sent to %s: %s", recipient, subject)
             success = True
 
