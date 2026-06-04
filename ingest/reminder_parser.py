@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone, timedelta
 
+from services.langfuse_compat import observe
+
 logger = logging.getLogger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -91,6 +93,7 @@ def _parse_relative(text: str, now: datetime) -> datetime | None:
     return None
 
 
+@observe(name="parse_reminder")
 def parse_reminder(text: str) -> datetime | None:
     """Return a UTC datetime if the text contains a reminder expression, else None."""
     from services.langfuse_compat import OpenAI
@@ -144,6 +147,7 @@ def parse_reminder(text: str) -> datetime | None:
         return None
 
 
+@observe(name="strip_reminder")
 def strip_reminder(text: str) -> str:
     """
     Remove the reminder/follow-up phrase from text, returning just the clean note.

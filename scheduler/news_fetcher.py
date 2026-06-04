@@ -17,6 +17,8 @@ from datetime import datetime, timezone, timedelta
 import feedparser
 import requests
 
+from services.langfuse_compat import observe
+
 logger = logging.getLogger(__name__)
 
 # ── RSS feed sources ──────────────────────────────────────────────────────────
@@ -184,6 +186,7 @@ def filter_already_saved(items: list[dict]) -> list[dict]:
 
 # ── Step 3: Relevance filter ──────────────────────────────────────────────────
 
+@observe(name="filter_by_relevance")
 def filter_by_relevance(items: list[dict], min_score: int = 7) -> list[dict]:
     """Use GPT-4o-mini to score items, keep those >= min_score."""
     if not items:
